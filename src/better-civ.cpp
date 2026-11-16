@@ -82,6 +82,12 @@ static SimulationContextFunction relationship_manager;
 static RelationshipLevel relationship_level;
 static FindPlayerCivilization find_player_civilization;
 static CurrentVehicleOrder current_vehicle_order;
+using RegisterPortrait = void (__thiscall*)(Native::RivalPortraitPanel*, Civilization*);
+using RestorePortrait = void (__thiscall*)(Native::RivalPortraitPanel*, int, Civilization*);
+using ReadLocalizedText = const char16_t* (__thiscall*)(LocalizedString*);
+static RegisterPortrait original_register_portrait;
+static RestorePortrait original_restore_portrait;
+static ReadLocalizedText read_localized_text;
 
 static void load_options(void)
 {
@@ -186,6 +192,91 @@ static bool __cdecl configured_palette_int(const App::PropertyList* list, uint32
         result = palette_vehicle_price(result);
     return found;
 }
+
+static const char16_t* discount_hover_text(const char16_t* native, char16_t (&buffer)[512])
+{
+    if (!native || settings.cost_percent == 100 || !in_civilization()) return native;
+    size_t length = 0;
+    while (length < 512 && native[length]) ++length;
+    if (length == 512) return native;
+    size_t begin = 0;
+    while (begin < length && (native[begin] < u'0' || native[begin] > u'9')) ++begin;
+    if (begin == length) return native;
+    size_t end = begin;
+    int64_t price = 0;
+    char16_t separator = 0;
+    while (end < length) {
+        const char16_t ch = native[end];
+        if (ch >= u'0' && ch <= u'9') {
+            price = price * 10 + ch - u'0';
+            if (price > INT32_MAX) return native;
+        } else if ((ch == u' ' || ch == u'\u00a0' || ch == u'\u202f' || ch == u',' || ch == u'.' || ch == u'\'') &&
+                   end + 1 < length && native[end + 1] >= u'0' && native[end + 1] <= u'9') {
+            separator = ch;
+        } else break;
+        ++end;
+    }
+    int32_t discounted = palette_vehicle_price(static_cast<int32_t>(price));
+    char16_t reverse[24];
+    size_t digits = 0, count = 0;
+    do {
+        if (separator && digits && digits % 3 == 0) reverse[count++] = separator;
+        reverse[count++] = static_cast<char16_t>(u'0' + discounted % 10);
+        discounted /= 10;
+        ++digits;
+    } while (discounted);
+    if (begin + count + length - end >= 512) return native;
+    memcpy(buffer, native, begin * sizeof(char16_t));
+    for (size_t i = 0; i < count; ++i) buffer[begin + i] = reverse[count - i - 1];
+    memcpy(buffer + begin + count, native + end, (length - end + 1) * sizeof(char16_t));
+    return buffer;
+}
+
+// The three world-view purchase buttons use localized text with a literal
+// vanilla price. These exact GetText calls are separate from paletteItemCost.
+member_detour(configured_hover_text, LocalizedString, const char16_t*()) {
+    const char16_t* detoured()
+    {
+        static thread_local char16_t buffer[512];
+        return discount_hover_text(read_localized_text(this), buffer);
+    }
+};
+
+static int available_portrait(const Native::RivalPortraitPanel* panel, const Civilization* civilization)
+{
+    int free_slot = -1;
+    for (int i = 0; i < 4; ++i) {
+        const auto& slot = panel->slots[i];
+        if (slot.occupied && slot.civilization == civilization) return i;
+        if (!slot.occupied && free_slot < 0) free_slot = i;
+    }
+    return free_slot;
+}
+
+member_detour(safe_register_portrait, Native::RivalPortraitPanel, void(Civilization* civilization)) {
+    void detoured(Civilization* civilization)
+    {
+        if (!civilization) return;
+        if (available_portrait(this, civilization) >= 0) {
+            original_register_portrait(this, civilization);
+        } else {
+            civilization->mCommRelPanelSlot = -1;
+            ModAPI::Log("[Better Civ] Rival portrait panel full; extra nation remains active.");
+        }
+    }
+};
+
+member_detour(safe_restore_portrait, Native::RivalPortraitPanel, void(int slot, Civilization* civilization)) {
+    void detoured(int slot, Civilization* civilization)
+    {
+        if (!civilization) return;
+        if (slot < 0 || slot >= 4 ||
+            (this->slots[slot].occupied && this->slots[slot].civilization != civilization))
+            slot = available_portrait(this, civilization);
+        civilization->mCommRelPanelSlot = slot;
+        if (slot >= 0) original_restore_portrait(this, slot, civilization);
+    }
+};
 
 member_detour(configured_firing_interval, App::Property, const float *()) {
     const float* detoured()
@@ -485,6 +576,8 @@ static int install_rules(unsigned char *base)
     const int extend_layout = settings.turrets == TURRETS_ALL_SPECIALTIES;
     BranchSite sites[] = {
         {0xb9bda0, {0xe8, 0x4b, 0xdc, 0xff, 0xff}, (uintptr_t)found_major_city, NULL, 0, 1},
+        {0xbf468d, {0xe8, 0x7e, 0x1f, 0x21, 0x00}, (uintptr_t)safe_register_portrait::detoured_function, NULL, 0, 1},
+        {0xe065de, {0xe8, 0xed, 0xfe, 0xff, 0xff}, (uintptr_t)safe_restore_portrait::detoured_function, NULL, 0, 1},
         {0xbfb446, {0xe8, 0x45, 0x3b, 0x0f, 0x00}, (uintptr_t)trade_acceptance::detoured_function, NULL, 0, settings.assist_rival_trade},
         {0xbfb7bc, {0xe8, 0xcf, 0x37, 0x0f, 0x00}, (uintptr_t)trade_acceptance::detoured_function, NULL, 0, settings.assist_rival_trade},
         {0xdca391, {0xe8, 0xfa, 0x4b, 0xf2, 0xff}, (uintptr_t)trade_acceptance::detoured_function, NULL, 0, settings.assist_rival_trade},
@@ -514,6 +607,9 @@ static int install_rules(unsigned char *base)
         {0x5f1d08, {0x8b, 0x11, 0x8b, 0x52, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xba},
         {0x5ed8b1, {0xe8, 0x7a, 0x2a, 0xe2, 0xff}, (uintptr_t)configured_palette_int, NULL, 0, settings.cost_percent != 100},
         {0x59e840, {0xe8, 0xeb, 0x1a, 0xe7, 0xff}, (uintptr_t)configured_palette_int, NULL, 0, settings.cost_percent != 100},
+        {0xe2bb36, {0xe8, 0x15, 0x9a, 0x88, 0xff}, (uintptr_t)configured_hover_text::detoured_function, NULL, 0, settings.cost_percent != 100},
+        {0xe2bdaa, {0xe8, 0xa1, 0x97, 0x88, 0xff}, (uintptr_t)configured_hover_text::detoured_function, NULL, 0, settings.cost_percent != 100},
+        {0xe2c04f, {0xe8, 0xfc, 0x94, 0x88, 0xff}, (uintptr_t)configured_hover_text::detoured_function, NULL, 0, settings.cost_percent != 100},
         {0xca68b1, {0xe8, 0x7a, 0x81, 0x77, 0xff}, (uintptr_t)configured_firing_interval::detoured_function, NULL, 0, settings.firing_interval_percent != 100},
         // Loading a scenario and founding a fresh Civilization planet read the same ranges.
         {0xb96b86, {0xe8, 0xc5, 0xba, 0xc5, 0xff}, (uintptr_t)configured_civ_generation::detoured_function, NULL, 0, custom_population()},
@@ -545,6 +641,9 @@ static int install_rules(unsigned char *base)
     }
 
     read_script_float = (ReadScriptFloat)(base + (0x7f2650 - kReferenceBase));
+    original_register_portrait = reinterpret_cast<RegisterPortrait>(base + (0xe06610 - kReferenceBase));
+    original_restore_portrait = reinterpret_cast<RestorePortrait>(base + (0xe064d0 - kReferenceBase));
+    read_localized_text = reinterpret_cast<ReadLocalizedText>(base + (0x6b5550 - kReferenceBase));
     read_float_property = (ReadFloatProperty)(base + (0x41ea30 - kReferenceBase));
     random_below = (RandomBelow)(base + (0xa68f70 - kReferenceBase));
     simulation_random = base + (0x1601760 - kReferenceBase);

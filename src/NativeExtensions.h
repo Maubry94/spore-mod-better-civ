@@ -32,6 +32,24 @@ static_assert(offsetof(VehicleOrder, kind) == 0x10);
 // Only passed back to the native acceptance method; its layout is unknown.
 struct TradeTuning {};
 
+// Civilization diplomacy UI: four native portrait entries, not one per major
+// nation. The allocator at 0xE06610 otherwise falls through with index 4.
+struct RivalPortraitSlot {
+    uint32_t window_id;
+    bool occupied;
+    unsigned char unknown[3];
+    Simulator::cCivilization* civilization;
+};
+struct RivalPortraitPanel {
+    unsigned char unknown[0x8c];
+    RivalPortraitSlot slots[4];
+};
+static_assert(sizeof(RivalPortraitSlot) == 12);
+static_assert(offsetof(RivalPortraitPanel, slots) == 0x8c);
+static_assert(offsetof(RivalPortraitSlot, occupied) == 4);
+static_assert(offsetof(RivalPortraitSlot, civilization) == 8);
+static_assert(offsetof(Simulator::cCivilization, mCommRelPanelSlot) == 0x29c);
+
 inline uint32_t TradePartnerPoliticalId(const Simulator::cCityPartner& partner)
 {
     // The current SDK labels this first word as mpInterCityRoad. The supported

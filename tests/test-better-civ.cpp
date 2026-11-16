@@ -2,6 +2,7 @@
 using namespace BetterCiv;
 #include <assert.h>
 #include <stdio.h>
+#include <string>
 
 enum {
     kSiteMinorNation=0x25, kSiteSpecialty=0x28, kCityIsPlayerOwned=0x33c,
@@ -73,6 +74,7 @@ static void __fastcall mock_specialty(unsigned char *city, int, int kind, int wa
 static const uint32_t optional_sites[] = {
     0xbf2342, 0xca68b1, 0xb96b86, 0xb96ba1, 0xb9da81, 0xb9daa1,
     0xb96bbc, 0xb96bd0, 0xb9dac1, 0xb9dad8, 0xb97142,
+    0xe2bb36, 0xe2bdaa, 0xe2c04f,
 };
 
 static const uintptr_t optional_targets[] = {
@@ -82,6 +84,8 @@ static const uintptr_t optional_targets[] = {
     (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
     (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
     (uintptr_t)configured_starting_vehicles::detoured_function,
+    (uintptr_t)configured_hover_text::detoured_function, (uintptr_t)configured_hover_text::detoured_function,
+    (uintptr_t)configured_hover_text::detoured_function,
 };
 
 static const uint32_t palette_sites[] = {0xd08195, 0xd08333, 0xd088d6, 0xe4950c, 0x5f1d08, 0x5ed8b1, 0x59e840};
@@ -223,7 +227,7 @@ static void verify_palette_prices(void)
     type.SetItemType(Palettes::PaletteItem::kItemCityVehicle);
 
     // Land, sea and air base costs, and a non-default compatible palette cost.
-    const int32_t base_prices[] = {1000, 2000, 3000, 1200};
+    const int32_t base_prices[] = {1000, 1500, 3000, 1200};
     for (int percent : {50, 75, 100}) {
         settings.cost_percent = percent;
         for (int32_t base : base_prices) {
@@ -307,6 +311,98 @@ static void verify_palette_prices(void)
     native.mnType = App::PropertyType::Float;
     assert(lookup(list, kPaletteItemCost, result) && result == &native);
     settings = defaults;
+}
+
+static const char16_t* __fastcall mock_localized_text(LocalizedString* text, void*)
+{
+    return reinterpret_cast<const char16_t*>(text);
+}
+
+static void verify_hover_prices(void)
+{
+    read_localized_text = reinterpret_cast<ReadLocalizedText>(mock_localized_text);
+    const auto read = reinterpret_cast<ReadLocalizedText>(configured_hover_text::detoured_function);
+    current_mode = kCivilizationMode;
+    const char16_t* templates[] = {u"Land vehicle (1,000 Sporebucks)", u"V\u00e9hicule terrestre (1 000 Sflouz)",
+                                  u"Boat (1\u202f500)", u"Air vehicle (3.000)"};
+    const char16_t* half[] = {u"Land vehicle (500 Sporebucks)", u"V\u00e9hicule terrestre (500 Sflouz)",
+                             u"Boat (750)", u"Air vehicle (1.500)"};
+    const char16_t* reduced[] = {u"Land vehicle (750 Sporebucks)", u"V\u00e9hicule terrestre (750 Sflouz)",
+                                u"Boat (1\u202f125)", u"Air vehicle (2.250)"};
+    for (int percent : {50, 75, 100}) {
+        settings.cost_percent = percent;
+        for (size_t i = 0; i < 4; ++i) {
+            for (int repeat = 0; repeat < 3; ++repeat) {
+                const char16_t* expected = percent == 100 ? templates[i] : percent == 50 ? half[i] : reduced[i];
+                const char16_t* actual = read(reinterpret_cast<LocalizedString*>(const_cast<char16_t*>(templates[i])));
+                assert(std::u16string(actual) == expected);
+            }
+        }
+    }
+    char16_t buffer[512];
+    settings.cost_percent = 50;
+    for (const char16_t* text : {u"", u"No available vehicle", u"Vehicle (999999999999999999999999)"})
+        assert(discount_hover_text(text, buffer) == text);
+    const std::u16string long_text(512, u'1');
+    assert(discount_hover_text(long_text.c_str(), buffer) == long_text.c_str());
+    assert(!discount_hover_text(nullptr, buffer));
+    assert(std::u16string(discount_hover_text(u"Vehicle (0)", buffer)) == u"Vehicle (0)");
+    current_mode = 0x01654c05;
+    assert(discount_hover_text(templates[0], buffer) == templates[0]);
+    current_mode = kCivilizationMode;
+    settings = defaults;
+}
+
+static int portrait_calls;
+static void __fastcall mock_restore_portrait(Native::RivalPortraitPanel* panel, void*, int slot, Civilization* civ)
+{
+    assert(slot >= 0 && slot < 4);
+    ++portrait_calls;
+    panel->slots[slot].occupied = true;
+    panel->slots[slot].civilization = civ;
+}
+static void __fastcall mock_register_portrait(Native::RivalPortraitPanel* panel, void*, Civilization* civ)
+{
+    // Emulate the native four-slot search. Entering this with a full panel and
+    // a fifth nation is precisely the path observed in the crash dump.
+    int slot = 0;
+    for (; slot < 4; ++slot)
+        if (panel->slots[slot].occupied && panel->slots[slot].civilization == civ) return;
+    for (slot = 0; slot < 4 && panel->slots[slot].occupied; ++slot) {}
+    assert(slot < 4);
+    mock_restore_portrait(panel, nullptr, slot, civ);
+    civ->mCommRelPanelSlot = slot;
+}
+static void verify_portrait_bounds(void)
+{
+    original_register_portrait = reinterpret_cast<RegisterPortrait>(mock_register_portrait);
+    original_restore_portrait = reinterpret_cast<RestorePortrait>(mock_restore_portrait);
+    const auto add = reinterpret_cast<RegisterPortrait>(safe_register_portrait::detoured_function);
+    const auto restore = reinterpret_cast<RestorePortrait>(safe_restore_portrait::detoured_function);
+    Native::RivalPortraitPanel panel{};
+    alignas(4) unsigned char data[9][0x2c0] = {};
+    Civilization* civs[9];
+    for (int i = 0; i < 9; ++i) {
+        civs[i] = reinterpret_cast<Civilization*>(data[i]);
+        civs[i]->mCommRelPanelSlot = -1;
+        add(&panel, civs[i]);
+        assert(civs[i]->mCommRelPanelSlot == (i < 4 ? i : -1));
+    }
+    assert(portrait_calls == 4);
+    for (int i = 0; i < 9; ++i) add(&panel, civs[i]);
+    assert(portrait_calls == 4);
+    panel = {};
+    for (int i = 0; i < 9; ++i) restore(&panel, civs[i]->mCommRelPanelSlot, civs[i]);
+    assert(portrait_calls == 8);
+    for (int bad_slot : {-1, 4, 9, INT32_MAX, INT32_MIN}) {
+        restore(&panel, bad_slot, civs[8]);
+        assert(civs[8]->mCommRelPanelSlot == -1 && portrait_calls == 8);
+    }
+    panel.slots[2] = {};
+    restore(&panel, 0, civs[8]);
+    assert(civs[8]->mCommRelPanelSlot == 2 && portrait_calls == 9);
+    add(&panel, nullptr);
+    restore(&panel, 4, nullptr);
 }
 
 static void verify_foundation(unsigned char *site)
@@ -552,17 +648,24 @@ static void verify_reference_writes(const char *path, int variant)
     // Emulate the Steam PE header around the same code after initialization.
     image_header->OptionalHeader.SizeOfImage = kSteamOctober2024ImageSize;
     unsigned char *sites[] = {founding, limit, editor, capture,
-      image + 0xbe8c2c - kReferenceBase, image + 0xbe5c45 - kReferenceBase, image + 0xbe5cc4 - kReferenceBase};
+      image + 0xbe8c2c - kReferenceBase, image + 0xbe5c45 - kReferenceBase, image + 0xbe5cc4 - kReferenceBase,
+      image + 0xbf468d - kReferenceBase, image + 0xe065de - kReferenceBase};
     uintptr_t targets[] = {(uintptr_t)found_major_city, (uintptr_t)extended_turret_limit::detoured_function,
                            (uintptr_t)extended_turret_limit::detoured_function, (uintptr_t)retain_rival_city_specialty::detoured_function,
-                           (uintptr_t)retain_rival_city_specialty::detoured_function, (uintptr_t)defensive_capacity_target::detoured_function, (uintptr_t)defensive_building_count::detoured_function};
+                           (uintptr_t)retain_rival_city_specialty::detoured_function, (uintptr_t)defensive_capacity_target::detoured_function, (uintptr_t)defensive_building_count::detoured_function,
+                           (uintptr_t)safe_register_portrait::detoured_function, (uintptr_t)safe_restore_portrait::detoured_function};
     int enabled[] = {1, variant == 1, variant == 1, variant == 1,
-                     variant == 1, variant != 0, variant != 0};
+                     variant == 1, variant != 0, variant != 0, 1, 1};
     uint32_t fleet_sites[] = {0xbd7325, 0xbf228a, 0xbf686f, 0xbf6afa, 0xd07c73,
                              0xd1df57, 0xd1df73, 0xd1df93};
     unsigned char original_base_bytes[sizeof sites / sizeof sites[0]][5];
     for (size_t i = 0; i < sizeof sites / sizeof sites[0]; ++i)
         memcpy(original_base_bytes[i], sites[i], 5);
+    for (size_t i = 7; i < 9; ++i) {
+        sites[i][4] ^= 1;
+        assert(!install_rules(image) && memcmp(founding, original_base_bytes[0], 5) == 0);
+        sites[i][4] ^= 1;
+    }
     if (enabled[3]) {
         capture[4] ^= 1;
         assert(!install_rules(image) && memcmp(founding, original_base_bytes[0], 5) == 0);
@@ -717,6 +820,9 @@ int main(int argc, char *argv[])
     puts("Settings checks passed; checking palette prices...");
     verify_palette_prices();
     puts("Palette price and affordability checks passed.");
+    verify_hover_prices();
+    verify_portrait_bounds();
+    puts("Localized hover prices and nine-rival portrait bounds passed.");
     verify_fleet_capacity();
     verify_rival_trade();
     verify_reference_writes(argv[1], 0);

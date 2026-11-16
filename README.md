@@ -13,9 +13,11 @@ Download the `.sporemod` from [Releases](https://github.com/Maubry94/spore-mod-b
 
 Install the archive with the Spore ModAPI Easy Installer. Start a new Civilization game to apply city generation and starting settings. The **8 Slots per City** mode is designed for the stock city walls.
 
+The native diplomacy portrait panel still has four slots. This branch prevents additional rivals from overflowing that panel; all nine rivals remain active, but extra portraits are not displayed there.
+
 ## Build the DLL
 
-This branch migrates the DLL to C++17, MSVC and the Spore ModAPI SDK. It also fixes discounted vehicle prices in the planner and tooltips, including the planner's affordability check. Gameplay settings and packaged game data are unchanged. The published v1.0 release remains the reference build until in-game regression testing is complete.
+This branch migrates the DLL to C++17, MSVC and the Spore ModAPI SDK. Follow-up fixes address vehicle prices in the planner and world-view purchase tooltips, and a crash when a fifth rival qualifies for the four-slot diplomacy portrait panel. Gameplay settings and packaged game data are unchanged. The published v1.0 release remains the reference build until in-game regression testing is complete.
 
 Install Visual Studio 2022 (or its Build Tools) with **MSVC v143 C++ x86/x64 build tools** and a **Windows 10 or 11 SDK**. Get the [Spore ModAPI SDK](https://github.com/Spore-Community/Spore-ModAPI) and the ModAPI Launcher Kit. The tested SDK revision is recorded in `sdk-version.txt`.
 

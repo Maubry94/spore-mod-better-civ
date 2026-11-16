@@ -20,6 +20,7 @@ The SDK does not yet provide every function or record used here. `NativeExtensio
 - The active vehicle order, for which the SDK currently has a placeholder.
 - The first word of a trade-partner entry. The supported executable uses a political ID here; the pinned SDK labels it as a road pointer. This word is copied, never dereferenced or reference-counted.
 - An opaque receiver for the native trade-acceptance function.
+- The four entries in the Civilization diplomacy portrait panel, used to prevent overflow when additional major rivals make their first conquest.
 
 Native call bindings and their checked addresses remain in `better-civ.cpp`. They are retained deliberately, rather than substituting superficially similar SDK methods without confirming their behavior.
 
@@ -100,7 +101,7 @@ The fix scales the UI cost at seven narrowly checked read sites. It requires `pa
 
 Five sites replace the virtual-function target load with an adapter address in the same register, leaving the existing call and arguments intact. Two replace a direct `Property::GetInt32` call. The adapters use SDK `PropertyList` and `Property` operations. Expected instruction bytes are checked before installing any rule; a conflicting enabled site rejects the entire installation.
 
-Offline checks cover 50%, 75% and vanilla prices, repeat reads without cumulative discounts, funds just below/at/above the price, non-vehicle items, missing/wrong-type properties, Space Stage, both x86 indirect-call forms, and reference-executable patch validation. In-game confirmation of this fix remains pending.
+Offline checks cover 50%, 75% and vanilla prices, repeat reads without cumulative discounts, funds just below/at/above the price, non-vehicle items, missing/wrong-type properties, Space Stage, both x86 indirect-call forms, and reference-executable patch validation. The user subsequently confirmed planner land pricing and affordability, unchanged building/turret prices, and no cumulative discount. World-view purchase text still showed the original price; sea and air checks were not reported.
 
 ### Test B1: discounted prices
 
@@ -122,12 +123,53 @@ Use **Hard** difficulty and a **Military** player. An existing backed-up Test B 
 
 Keep room in the fleet and use an unlocked vehicle type with the required port/air access when testing affordability.
 
-- [ ] The city vehicle menu and city-hover tooltips display the discounted land and sea prices (500 instead of 1,000 for the reported land vehicle).
-- [ ] With funds between the discounted and original prices, the planner allows a purchase and deducts only the discounted price.
-- [ ] Below the discounted price, the planner refuses the purchase; at the exact price, it allows it.
-- [ ] Buying through the city-hover shortcut still works at the same price.
+- [x] The city vehicle menu displays 500 instead of 1,000 for the land vehicle.
+- [ ] City-hover tooltips and sea/air prices display the discounted amount.
+- [x] With funds between the discounted and original prices, the planner allows a land purchase and deducts only 500.
+- [x] Below 500, the planner refuses the land purchase.
+- [ ] At exactly 500, the planner allows the land purchase.
+- [x] Buying through the city-hover shortcut still works at the reduced price.
 - [ ] Air vehicle labels and purchases also match once available.
-- [ ] Building and turret prices are unchanged; opening the planner repeatedly does not reduce any price again.
+- [x] Building and turret prices are unchanged; opening the planner repeatedly does not reduce any price again.
 - [ ] Saving/reloading and the remaining late-game Test B checks work.
 
 For a subsequent price-only comparison, keep **every Test B1 setting** and change only **Vehicle Cost = 75% of Vanilla** (land example: 750). Repeat once with **Vehicle Cost = Vanilla (1x)** (land example: 1,000). Restart the game after each configuration change. These comparisons do not require starting new games.
+
+## Crash and world-view tooltip follow-up
+
+The 2026-11-16 20:33:44 crash report and minidump identify a null UI-window read at reference address `0xE047E5` (loaded executable base `0x7D0000`, fault `0x11D47E5`). The stack contains returns to `0xE06539`, `0xE0665B`, and `0xBF4692`. At the portrait-registration caller, the saved slot argument is **4**, outside the native valid range **0..3**.
+
+The first conquest notification at `0xBF468D` calls a routine that scans four occupied slots, then passes index 4 to the portrait setup routine when all four are full. That routine writes outside the portrait array and tries to access a nonexistent window. This explains a crash while observing wars: an AI conquest triggers the notification independently of camera movement. It is a different fault location from the earlier city-editor crash; that earlier failure remains unresolved. Private crash dumps and user paths are not included in the repository or mod archive.
+
+The follow-up guards registration at `0xBF468D` and restoration at `0xE065DE`. A full panel leaves the additional rival's portrait slot at -1 instead of calling the overflowing allocator. Loading a saved invalid/conflicting slot uses an available valid slot or leaves that portrait unassigned. All rivals keep their simulation and cities; this is **not** a nine-portrait UI redesign. The four-slot panel remains a visible limitation. A blocked extra portrait logs `[Better Civ] Rival portrait panel full; extra nation remains active.`
+
+The three city-hover purchase tooltips instead use localized strings containing literal vanilla costs. Verified French game resources contain land 1,000, sea 1,500 and air 3,000. Scoped `LocalizedString::GetText` adapters at `0xE2BB36`, `0xE2BDAA`, and `0xE2C04F` scale the numeric price, preserving the game language and thousands separator. The purchase charge is unchanged. Unrecognized or oversized text falls back to the original string.
+
+Offline Release and Debug checks cover nine registration attempts into four slots, duplicate notifications, reloads, invalid slot indices, reuse of a vacant slot, localized 50%/75%/vanilla price text, and reference-executable instruction checks. These do not establish in-game crash freedom.
+
+### Test B2: world-view price and portrait overflow
+
+Use a backed-up Test B save if available, **Hard** difficulty and a **Military** player. Exit the game before replacing the test build.
+
+| Setting | Value |
+| --- | --- |
+| Vehicle Cost | 50% of Vanilla |
+| Firing Interval | Vanilla (2 s) |
+| Vehicle Speed | Vanilla (1x) |
+| Offensive Units | 16 Units |
+| AI Population | 30 per Rival |
+| AI Starting Funds | 8,000 per Rival |
+| AI Specialties | Military Only |
+| Captured Cities | Keep Specialty |
+| Turrets & Fleets | 8 Slots per City |
+| Rival Trade | First Rival Route |
+| Trade Under Fire | Stay on Course |
+
+- [ ] Hovering the world-view land purchase button displays 500; buying still deducts 500.
+- [ ] When unlocked, sea and air purchase buttons display and charge 750 and 1,500 respectively with stock vehicle costs.
+- [ ] Land purchases in the city planner still use the 500 threshold, with fleet space available.
+- [ ] Resume from before the crash and observe conquests. If five different AI nations have each captured at least one city, the game continues rather than overflowing the portrait panel.
+- [ ] If the overflow guard log appears, the extra nation remains active and can still be selected/contacted through its city.
+- [ ] Save and reload after that event, then check city selection, diplomacy and continued simulation.
+
+If fewer than five different rivals have made their first conquest, absence of a crash does not validate the overflow scenario. Trader-under-fire behavior and the remaining long-game checks are still pending.
