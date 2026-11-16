@@ -54,8 +54,7 @@
       <DataExecutionPrevention>true</DataExecutionPrevention>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <AdditionalLibraryDirectories>$(SporeLauncherPath)\coreLibs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>delayimp.lib;SporeModAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>SporeModAPI.dll</DelayLoadDLLs>
+      <AdditionalDependencies>SporeModAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Target Name="ValidateSdkPaths" BeforeTargets="PrepareForBuild">

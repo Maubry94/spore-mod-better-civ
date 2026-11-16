@@ -5,6 +5,8 @@
 #include <wchar.h>
 #include <Spore/ModAPI.h>
 #include <Spore/App/Property.h>
+#include <Spore/App/PropertyList.h>
+#include <Spore/Palettes/PaletteItem.h>
 #include <Spore/App/cArithmeticaResource.h>
 #include "Settings.h"
 #include "NativeExtensions.h"
@@ -138,6 +140,52 @@ member_detour(configured_price, App::Property, const float *()) {
         return &value;
     }
 };
+
+// The planner and tooltips read paletteItemCost, not cCivilization's float
+// vehicle cost. Keep both paths on the same multiplier without editing the
+// shared property list (which can also be used outside Civilization).
+static constexpr uint32_t kPaletteItemCost = 0x02166464;
+static constexpr uint32_t kPaletteItemType = 0x02196ad5;
+
+static bool is_discounted_vehicle_item(const App::PropertyList* list, uint32_t property_id)
+{
+    if (property_id != kPaletteItemCost || settings.cost_percent == 100 || !in_civilization())
+        return false;
+    uint32_t type = 0;
+    return App::Property::GetKeyInstanceID(list, kPaletteItemType, type) &&
+        type == Palettes::PaletteItem::kItemCityVehicle;
+}
+
+static int32_t palette_vehicle_price(int32_t native)
+{
+    // Zero/negative values are UI sentinels; the offered percentages are <= 100.
+    return native > 0 ? static_cast<int32_t>(static_cast<int64_t>(native) * settings.cost_percent / 100)
+                      : native;
+}
+
+member_detour(configured_palette_cost, App::PropertyList, bool(uint32_t property_id, App::Property*& result)) {
+    bool detoured(uint32_t property_id, App::Property*& result)
+    {
+        const bool found = this->GetProperty(property_id, result);
+        if (found && result && result->mnType == App::PropertyType::Int32 &&
+            is_discounted_vehicle_item(this, property_id)) {
+            // Each checked caller consumes the scalar immediately. Never give
+            // the engine a stack pointer or modify the original property.
+            static thread_local App::Property adjusted;
+            adjusted.SetValueInt32(palette_vehicle_price(*result->GetValueInt32()));
+            result = &adjusted;
+        }
+        return found;
+    }
+};
+
+static bool __cdecl configured_palette_int(const App::PropertyList* list, uint32_t property_id, int32_t& result)
+{
+    const bool found = App::Property::GetInt32(list, property_id, result);
+    if (found && is_discounted_vehicle_item(list, property_id))
+        result = palette_vehicle_price(result);
+    return found;
+}
 
 member_detour(configured_firing_interval, App::Property, const float *()) {
     const float* detoured()
@@ -391,17 +439,25 @@ static float __cdecl retreat_on_hit(Vehicle* vehicle)
     return 1.0f;
 }
 
-typedef struct {
+struct BranchSite {
     uintptr_t site;
     unsigned char expected[5];
     uintptr_t replacement;
     unsigned char *location;
     DWORD protection;
     int enabled;
-} BranchSite;
+    // Zero: relative call/jump. Otherwise: opcode for mov eax/edx, imm32.
+    unsigned char load_target_opcode = 0;
+};
 
 static void write_branch(BranchSite *site)
 {
+    if (site->load_target_opcode) {
+        const uint32_t address = static_cast<uint32_t>(site->replacement);
+        memcpy(site->location + 1, &address, sizeof address);
+        site->location[0] = site->load_target_opcode;
+        return;
+    }
     uint32_t displacement = (uint32_t)(site->replacement - (uintptr_t)site->location - 5);
     memcpy(site->location + 1, &displacement, sizeof displacement);
     // Use a tail jump for the predicate entry, keeping its cdecl caller and float result.
@@ -449,6 +505,15 @@ static int install_rules(unsigned char *base)
         {0xd1df73, {0xe8, 0x98, 0x41, 0xed, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
         {0xd1df93, {0xe8, 0x78, 0x41, 0xed, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
         {0xbf2342, {0xe8, 0xe9, 0xc6, 0x82, 0xff}, (uintptr_t)configured_price::detoured_function, NULL, 0, settings.cost_percent != 100},
+        // Replace only the five-byte virtual target load, retaining the native
+        // arguments, indirect call, result test and register/stack convention.
+        {0xd08195, {0x8b, 0x01, 0x8b, 0x40, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xb8},
+        {0xd08333, {0x8b, 0x01, 0x8b, 0x40, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xb8},
+        {0xd088d6, {0x8b, 0x01, 0x8b, 0x40, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xb8},
+        {0xe4950c, {0x8b, 0x01, 0x8b, 0x40, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xb8},
+        {0x5f1d08, {0x8b, 0x11, 0x8b, 0x52, 0x24}, (uintptr_t)configured_palette_cost::detoured_function, NULL, 0, settings.cost_percent != 100, 0xba},
+        {0x5ed8b1, {0xe8, 0x7a, 0x2a, 0xe2, 0xff}, (uintptr_t)configured_palette_int, NULL, 0, settings.cost_percent != 100},
+        {0x59e840, {0xe8, 0xeb, 0x1a, 0xe7, 0xff}, (uintptr_t)configured_palette_int, NULL, 0, settings.cost_percent != 100},
         {0xca68b1, {0xe8, 0x7a, 0x81, 0x77, 0xff}, (uintptr_t)configured_firing_interval::detoured_function, NULL, 0, settings.firing_interval_percent != 100},
         // Loading a scenario and founding a fresh Civilization planet read the same ranges.
         {0xb96b86, {0xe8, 0xc5, 0xba, 0xc5, 0xff}, (uintptr_t)configured_civ_generation::detoured_function, NULL, 0, custom_population()},

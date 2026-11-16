@@ -28,10 +28,10 @@ if ($ReferenceExecutable) {
     $referencePath = (Resolve-Path -LiteralPath $ReferenceExecutable).Path
     & $MSBuildPath (Join-Path $repoPath 'BetterCiv.Tests.vcxproj') @arguments
     if ($LASTEXITCODE -ne 0) { throw "Test build failed ($LASTEXITCODE)." }
-    & (Join-Path $repoPath 'tests/mLibs/test-better-civ.exe') $referencePath
-    if ($LASTEXITCODE -ne 0) { throw "Tests failed ($LASTEXITCODE)." }
     & $MSBuildPath (Join-Path $repoPath 'BetterCiv.LoaderFixture.vcxproj') @arguments
     if ($LASTEXITCODE -ne 0) { throw "Loader fixture build failed ($LASTEXITCODE)." }
-    & (Join-Path $repoPath 'tests/mLibs/test-better-civ.exe') --loader (Join-Path $repoPath 'tests/loader-bin/SporeModAPI.dll') (Join-Path $repoPath "dist/$Configuration/BetterCiv.dll")
+    & (Join-Path $repoPath 'tests/mLibs/test-better-civ.exe') $referencePath (Join-Path $repoPath 'tests/mLibs/SporeModAPI.dll')
+    if ($LASTEXITCODE -ne 0) { throw "Tests failed ($LASTEXITCODE)." }
+    & (Join-Path $repoPath 'tests/mLibs/test-better-civ.exe') --loader (Join-Path $repoPath 'tests/mLibs/SporeModAPI.dll') (Join-Path $repoPath "dist/$Configuration/BetterCiv.dll")
     if ($LASTEXITCODE -ne 0) { throw "DLL loader test failed ($LASTEXITCODE)." }
 }

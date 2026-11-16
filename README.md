@@ -15,7 +15,7 @@ Install the archive with the Spore ModAPI Easy Installer. Start a new Civilizati
 
 ## Build the DLL
 
-This branch migrates the DLL to C++17, MSVC and the Spore ModAPI SDK. Gameplay settings and packaged game data are unchanged. The published v1.0 release remains the reference build until in-game regression testing is complete.
+This branch migrates the DLL to C++17, MSVC and the Spore ModAPI SDK. It also fixes discounted vehicle prices in the planner and tooltips, including the planner's affordability check. Gameplay settings and packaged game data are unchanged. The published v1.0 release remains the reference build until in-game regression testing is complete.
 
 Install Visual Studio 2022 (or its Build Tools) with **MSVC v143 C++ x86/x64 build tools** and a **Windows 10 or 11 SDK**. Get the [Spore ModAPI SDK](https://github.com/Spore-Community/Spore-ModAPI) and the ModAPI Launcher Kit. The tested SDK revision is recorded in `sdk-version.txt`.
 
@@ -39,7 +39,7 @@ Use Python 3.10 or later and the v1.0 release as the game-data input for this re
 
 ## Run the tests
 
-The tests cover option loading, specialty selection, capture rules, rival trade, trader retreat, fleet scaling, x86 calling conventions, and instruction checks against a compatible executable built from the October 2024 Steam version. Supply your own compatible unpacked executable. The retail executable can be packed on disk. Assertions remain enabled in both test configurations.
+The tests cover option loading, specialty selection, capture rules, rival trade, trader retreat, fleet scaling, vehicle price display and affordability, x86 calling conventions, and instruction checks against a compatible executable built from the October 2024 Steam version. Supply your own compatible unpacked executable. The retail executable can be packed on disk. Assertions remain enabled in both test configurations. The test-only SDK fixture in `tests/mLibs` must never be installed in the game or Launcher Kit.
 
 ```powershell
 ./tools/build.ps1 -SporeSdkPath "C:/dev/Spore-ModAPI" -SporeLauncherPath "C:/path/to/Spore ModAPI Launcher Kit" -ReferenceExecutable "C:/path/to/SporeApp_ModAPIFix.exe"

@@ -11,3 +11,4 @@ SdkPaths.props
 *.obj
 *.ilk
 tests/loader-bin/
+tests/mLibs/

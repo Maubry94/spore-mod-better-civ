@@ -84,6 +84,8 @@ static const uintptr_t optional_targets[] = {
     (uintptr_t)configured_starting_vehicles::detoured_function,
 };
 
+static const uint32_t palette_sites[] = {0xd08195, 0xd08333, 0xd088d6, 0xe4950c, 0x5f1d08, 0x5ed8b1, 0x59e840};
+
 static const Settings defaults = {
     100, 100, 8, 15, 15, 4000, 4000, kAllSpecialties, 0, TURRETS_VANILLA, 1, 1,
 };
@@ -182,6 +184,128 @@ static void verify_fleet_capacity(void)
     assert(fleet_capacity_with_defenses(36, TURRETS_ALL_SPECIALTIES, kDifficultyHard) == 36);
     difficulty = kDifficultyHard;
     current_mode = kCivilizationMode;
+    settings = defaults;
+}
+
+struct TestProperty : App::Property {
+    void SetItemType(Palettes::PaletteItem::ItemType type) {
+        mValueKey = ResourceKey(static_cast<uint32_t>(type), 0, 0);
+        mnType = App::PropertyType::Key;
+    }
+};
+
+struct TestPropertyList {
+    void** table;
+    App::Property* cost;
+    App::Property* type;
+};
+
+static bool __fastcall mock_property_lookup(const TestPropertyList* list, void*, uint32_t id, App::Property*& result)
+{
+    App::Property* found = id == kPaletteItemCost ? list->cost :
+                          id == kPaletteItemType ? list->type : nullptr;
+    if (!found) return false;
+    result = found;
+    return true;
+}
+
+static void verify_palette_prices(void)
+{
+    static_assert(sizeof(App::Property) == 0x14);
+    void* table[10] = {};
+    table[9] = reinterpret_cast<void*>(mock_property_lookup);
+    TestProperty native, type;
+    TestPropertyList fixture{table, &native, &type};
+    auto* list = reinterpret_cast<App::PropertyList*>(&fixture);
+    using Lookup = bool (__thiscall*)(App::PropertyList*, uint32_t, App::Property*&);
+    const auto lookup = reinterpret_cast<Lookup>(configured_palette_cost::detoured_function);
+    current_mode = kCivilizationMode;
+    type.SetItemType(Palettes::PaletteItem::kItemCityVehicle);
+
+    // Land, sea and air base costs, and a non-default compatible palette cost.
+    const int32_t base_prices[] = {1000, 2000, 3000, 1200};
+    for (int percent : {50, 75, 100}) {
+        settings.cost_percent = percent;
+        for (int32_t base : base_prices) {
+            native.SetValueInt32(base);
+            const int expected = base * percent / 100;
+            for (int repeat = 0; repeat < 3; ++repeat) {
+                App::Property* result = nullptr;
+                assert(lookup(list, kPaletteItemCost, result) && result);
+                const int displayed = *result->GetValueInt32();
+                int32_t tooltip = -1;
+                assert(configured_palette_int(list, kPaletteItemCost, tooltip));
+                float charged_base = static_cast<float>(base);
+                const float charged = *call_configured_price(&charged_base);
+                assert(displayed == expected && tooltip == expected && charged == expected);
+                // The planner's native affordability check compares funds with
+                // this returned cost. The original resource must stay intact.
+                for (int funds : {expected - 1, expected, expected + 1, base - 1})
+                    assert((funds >= displayed) == (funds >= charged));
+                assert(*native.GetValueInt32() == base);
+                assert((result == &native) == (percent == 100));
+            }
+        }
+    }
+    settings.cost_percent = 50;
+    native.SetValueInt32(1000);
+    // Execute both patched indirect-call forms, including the native stack
+    // argument layout. This catches a wrong register or callee stack cleanup.
+    const unsigned char load_opcodes[] = {0xb8, 0xba};
+    for (unsigned char opcode : load_opcodes) {
+        unsigned char caller[] = {0,0,0,0,0, 0xff,0x74,0x24,0x08,
+                                  0xff,0x74,0x24,0x08, 0xff,0xd0, 0xc2,0x08,0x00};
+        if (opcode == 0xba) caller[14] = 0xd2;
+        auto* executable = static_cast<unsigned char*>(VirtualAlloc(nullptr, sizeof caller,
+                                                    MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+        assert(executable);
+        memcpy(executable, caller, sizeof caller);
+        BranchSite target{0, {}, reinterpret_cast<uintptr_t>(configured_palette_cost::detoured_function),
+                          executable, 0, 1, opcode};
+        write_branch(&target);
+        DWORD protection;
+        assert(VirtualProtect(executable, sizeof caller, PAGE_EXECUTE_READ, &protection));
+        assert(FlushInstructionCache(GetCurrentProcess(), executable, sizeof caller));
+        App::Property* actual = nullptr;
+        assert(reinterpret_cast<Lookup>(executable)(list, kPaletteItemCost, actual));
+        assert(*actual->GetValueInt32() == 500);
+        assert(VirtualFree(executable, 0, MEM_RELEASE));
+    }
+    for (auto item_type : {Palettes::PaletteItem::kItemCityBuilding, Palettes::PaletteItem::kItemCityTurret,
+                              Palettes::PaletteItem::kItemTribeTool}) {
+        type.SetItemType(item_type);
+        App::Property* result = nullptr;
+        int32_t value = 0;
+        assert(lookup(list, kPaletteItemCost, result) && result == &native);
+        assert(configured_palette_int(list, kPaletteItemCost, value) && value == 1000);
+    }
+    type.SetItemType(Palettes::PaletteItem::kItemCityVehicle);
+    current_mode = 0x01654c05; // Space Stage uses the same palette class.
+    App::Property* result = nullptr;
+    int32_t value = -7;
+    assert(lookup(list, kPaletteItemCost, result) && result == &native);
+    assert(configured_palette_int(list, kPaletteItemCost, value) && value == 1000);
+    current_mode = kCivilizationMode;
+    for (int32_t sentinel : {0, -1}) {
+        native.SetValueInt32(sentinel);
+        assert(lookup(list, kPaletteItemCost, result));
+        assert(*result->GetValueInt32() == sentinel);
+    }
+    fixture.cost = nullptr;
+    result = &type;
+    value = -7;
+    assert(!lookup(list, kPaletteItemCost, result) && result == &type);
+    assert(!configured_palette_int(list, kPaletteItemCost, value) && value == -7);
+    assert(!configured_palette_int(nullptr, kPaletteItemCost, value) && value == -7);
+    fixture.cost = &native;
+    fixture.type = nullptr;
+    native.SetValueInt32(1000);
+    assert(lookup(list, kPaletteItemCost, result) && result == &native);
+    assert(configured_palette_int(list, kPaletteItemCost, value) && value == 1000);
+    fixture.type = &type;
+    assert(lookup(list, kPaletteItemType, result) && result == &type);
+    native.mnType = App::PropertyType::Float;
+    assert(lookup(list, kPaletteItemCost, result) && result == &native);
     settings = defaults;
 }
 
@@ -399,6 +523,16 @@ static void verify_reference_writes(const char *path, int variant)
     unsigned char original_option_bytes[sizeof optional_sites / sizeof optional_sites[0]][5];
     for (size_t i = 0; i < sizeof optional_sites / sizeof optional_sites[0]; ++i)
         memcpy(original_option_bytes[i], image + optional_sites[i] - kReferenceBase, 5);
+    unsigned char original_palette_bytes[sizeof palette_sites / sizeof palette_sites[0]][5];
+    for (size_t i = 0; i < sizeof palette_sites / sizeof palette_sites[0]; ++i) {
+        auto* site = image + palette_sites[i] - kReferenceBase;
+        memcpy(original_palette_bytes[i], site, 5);
+        if (use_options) {
+            site[4] ^= 1;
+            assert(!install_rules(image) && founding[1] == 0x4b);
+            site[4] ^= 1;
+        }
+    }
     unsigned char native_retreat[19];
     memcpy(native_retreat, retreat, sizeof native_retreat);
     if (settings.maintain_trade_under_fire) {
@@ -437,6 +571,8 @@ static void verify_reference_writes(const char *path, int variant)
     DWORD old;
     assert(VirtualProtect(founding, 5, PAGE_EXECUTE_READ, &old));
     assert(VirtualProtect(retreat, sizeof native_retreat, PAGE_EXECUTE_READ, &old));
+    for (uint32_t address : palette_sites)
+        assert(VirtualProtect(image + address - kReferenceBase, 5, PAGE_EXECUTE_READ, &old));
     assert(install_rules(image));
     if (settings.maintain_trade_under_fire) {
         uint32_t relative;
@@ -474,6 +610,22 @@ static void verify_reference_writes(const char *path, int variant)
                                         : (uintptr_t)configured_fleet_capacity::detoured_function;
         assert(site[0] == 0xe8 && (uintptr_t)site + 5 + relative == target);
     }
+    for (size_t i = 0; i < sizeof palette_sites / sizeof palette_sites[0]; ++i) {
+        const auto* site = image + palette_sites[i] - kReferenceBase;
+        if (!use_options) {
+            assert(memcmp(site, original_palette_bytes[i], 5) == 0);
+            continue;
+        }
+        uint32_t address;
+        memcpy(&address, site + 1, sizeof address);
+        if (i < 5) {
+            assert(site[0] == (i == 4 ? 0xba : 0xb8));
+            assert(address == reinterpret_cast<uintptr_t>(configured_palette_cost::detoured_function));
+        } else {
+            assert(site[0] == 0xe8 && reinterpret_cast<uintptr_t>(site) + 5 + address ==
+                   reinterpret_cast<uintptr_t>(configured_palette_int));
+        }
+    }
     const uint32_t commerce_sites[] = {0xbfb446, 0xbfb7bc, 0xdca391};
     for (size_t i = 0; i < sizeof commerce_sites / sizeof commerce_sites[0]; ++i) {
         unsigned char *site = image + commerce_sites[i] - kReferenceBase;
@@ -486,12 +638,15 @@ static void verify_reference_writes(const char *path, int variant)
     MEMORY_BASIC_INFORMATION page;
     assert(VirtualQuery(founding, &page, sizeof page) && page.Protect == PAGE_EXECUTE_READ);
     assert(VirtualQuery(retreat, &page, sizeof page) && page.Protect == PAGE_EXECUTE_READ);
+    for (uint32_t address : palette_sites)
+        assert(VirtualQuery(image + address - kReferenceBase, &page, sizeof page) && page.Protect == PAGE_EXECUTE_READ);
     VirtualFree(image, 0, MEM_RELEASE);
     HeapFree(GetProcessHeap(), 0, disk);
 }
 
 int main(int argc, char *argv[])
 {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     if (argc == 4 && strcmp(argv[1], "--loader") == 0) {
         // Load the shim explicitly from an isolated test directory. The actual
         // mod's DllMain must register with it through its real DLL imports.
@@ -507,6 +662,10 @@ int main(int argc, char *argv[])
         puts("DLL load, SDK initialization registration and unsupported-host rejection passed.");
         return 0;
     }
+    assert(argc == 3);
+    // Keep the fixture loaded until process exit: SDK addresses also back the
+    // thread-local scalar destructor. Nothing is copied into the game folders.
+    assert(LoadLibraryExA(argv[2], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
     unsigned char site[0x64] = {0};
     unsigned char city[0x818] = {0};
     game_mode = reinterpret_cast<decltype(game_mode)>(mock_mode);
@@ -554,8 +713,10 @@ int main(int argc, char *argv[])
     assert(call_defensive_building_count(city) == 3);
     assert(call_defensive_capacity_target(city) == 8);
     assert(install_rules(NULL) == 0);
-    assert(argc == 2);
     verify_settings();
+    puts("Settings checks passed; checking palette prices...");
+    verify_palette_prices();
+    puts("Palette price and affordability checks passed.");
     verify_fleet_capacity();
     verify_rival_trade();
     verify_reference_writes(argv[1], 0);
