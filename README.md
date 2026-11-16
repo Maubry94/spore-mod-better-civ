@@ -29,7 +29,7 @@ With the x86 edition of w64devkit, the compiler is named `gcc`.
 `ModInfo.xml` contains the installer text, option IDs, and package names. The release archive supplies the packaged game data, including speed presets and turret layouts. Open those packages in SporeModder FX to inspect or edit their resources. The packaging script combines those packages with the manifest and rebuilt DLL.
 
 ```powershell
-python tools/package.py "C:/Downloads/Better Civ.sporemod" "dist/BetterCiv.dll" "dist/Better Civ rebuilt.sporemod"
+python tools/package.py "./Better Civ.sporemod" "dist/BetterCiv.dll" "dist/Better Civ rebuilt.sporemod"
 ```
 
 Use the v1.0 release as the game-data input for this revision.
