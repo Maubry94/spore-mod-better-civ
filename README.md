@@ -46,4 +46,4 @@ i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -static-libgcc -I src -o
 
 ## Credits
 
-Based on [Civ Insanity by NeDether](https://github.com/NeDether/Civ-Insanity). The optional eight-turret layout uses turret positions from City Walls.
+Based on [Civ Insanity by NeDether](https://github.com/NeDether/Civ-Insanity). The optional eight-turret layout uses turret positions from [City Walls](https://www.nexusmods.com/spore/mods/10).
