@@ -1,1 +1,1 @@
-# spore-mod-better-civ
+# Better Civ
