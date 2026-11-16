@@ -81,15 +81,27 @@ static float __attribute__((thiscall)) mock_read_script(void *script, const char
 static void verify_settings(void)
 {
     settings = defaults;
-    apply_option(&settings, "<Prix>PrixVanilla");
-    apply_option(&settings, "<Offensifs>OffensifsVanilla");
-    apply_option(&settings, "<Flotte>FlotteInconnu");
-    apply_option(&settings, "<Prix>PrixReduitsTrailing");
-    apply_option(&settings, "<Capture>CaptureVanilla");
+    apply_option(&settings, "<VehicleCost>CostVanilla");
+    apply_option(&settings, "<OffensiveUnits>OffensiveUnitsVanilla");
+    apply_option(&settings, "<UnknownGroup>UnknownOption");
+    apply_option(&settings, "<VehicleCost>Cost50Trailing");
+    apply_option(&settings, "<CapturedCities>CaptureVanilla");
     assert(memcmp(&settings, &defaults, sizeof settings) == 0);
-    apply_option(&settings, "<Population>PopulationVariable");
+    apply_option(&settings, "<AIPopulation>Population15To50");
     assert(settings.population_min == 15 && settings.population_max == 50);
     assert(settings.wealth_min == 4000 && settings.wealth_max == 4000);
+
+    const char *legacy_choices[] = {
+        "<Prix>PrixModere", "<Tir>TirRapide", "<Vitesse>Vitesse125",
+        "<Offensifs>Offensifs12", "<Population>PopulationEgale30",
+        "<Tresorerie>TresorerieVariable", "<Specialites>SansReligieuses",
+        "<Capture>CaptureConserve", "<Tourelles>TourellesTous",
+        "<Commerce>CommerceVanilla", "<RepliCommercial>RepliVanilla",
+    };
+    Settings legacy = defaults;
+    for (size_t i = 0; i < sizeof legacy_choices / sizeof legacy_choices[0]; ++i)
+        apply_option(&legacy, legacy_choices[i]);
+    assert(memcmp(&legacy, &mixed, sizeof legacy) == 0);
 
     // Load the real installer settings format using the DLL-relative directory layout.
     settings = defaults;
@@ -146,8 +158,8 @@ static void verify_fleet_capacity(void)
 static void verify_foundation(unsigned char *site)
 {
     const char *options[] = {
-        "TroisSpecialites", "SansMilitaires", "SansReligieuses", "SansEconomiques",
-        "MilitairesSeulement", "ReligieusesSeulement", "EconomiquesSeulement",
+        "EqualOdds", "NoMilitary", "NoReligious", "NoEconomic",
+        "MilitaryOnly", "ReligiousOnly", "EconomicOnly",
     };
     const int specialties[][2] = {
         {kMilitary, kMilitary}, {kReligious, kEconomic}, {kMilitary, kEconomic},
@@ -158,7 +170,7 @@ static void verify_foundation(unsigned char *site)
     simulation_random = &mock_draw;
     for (size_t i = 0; i < sizeof options / sizeof options[0]; ++i) {
         char line[80];
-        snprintf(line, sizeof line, "<Specialites>%s", options[i]);
+        snprintf(line, sizeof line, "<AISpecialties>%s", options[i]);
         settings = defaults;
         apply_option(&settings, line);
         for (mock_draw = 0; mock_draw < 2; ++mock_draw) {
@@ -346,7 +358,7 @@ static void verify_reference_writes(const char *path, int variant)
     const int use_options = variant == 1;
     settings = use_options ? mixed : defaults;
     if (variant == 2)
-        apply_option(&settings, "<Tourelles>TourellesMaximum");
+        apply_option(&settings, "<TurretsAndFleets>MaxByTypeOnHard");
     unsigned char original_option_bytes[sizeof optional_sites / sizeof optional_sites[0]][5];
     for (size_t i = 0; i < sizeof optional_sites / sizeof optional_sites[0]; ++i)
         memcpy(original_option_bytes[i], image + optional_sites[i] - kReferenceBase, 5);

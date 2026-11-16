@@ -1,59 +1,59 @@
 <mod displayName="Better Civ" unique="BetterCiv" description="Ten major cities and configurable rules for Spore's Civilization Stage." installerSystemVersion="1.0.1.2" hasCustomInstaller="true" isExperimental="false" dllsBuild="2.5.290">
-  <componentGroup displayName="Vehicle Cost" unique="Prix">
-    <component game="GalacticAdventures" displayName="Vanilla (1x)" description="Use the original vehicle prices." unique="PrixVanilla" defaultChecked="true">CivInsanity-Option-PrixVanilla.package</component>
-    <component game="GalacticAdventures" displayName="75% of Vanilla" description="Reduce vehicle prices by 25%." unique="PrixModere" defaultChecked="false">CivInsanity-Option-PrixModere.package</component>
-    <component game="GalacticAdventures" displayName="50% of Vanilla" description="Reduce vehicle prices by 50%." unique="PrixReduits" defaultChecked="false">CivInsanity-Option-PrixReduits.package</component>
+  <componentGroup displayName="Vehicle Cost" unique="VehicleCost">
+    <component game="GalacticAdventures" displayName="Vanilla (1x)" description="Use the original vehicle prices." unique="CostVanilla" defaultChecked="true">CivInsanity-Option-PrixVanilla.package</component>
+    <component game="GalacticAdventures" displayName="75% of Vanilla" description="Reduce vehicle prices by 25%." unique="Cost75" defaultChecked="false">CivInsanity-Option-PrixModere.package</component>
+    <component game="GalacticAdventures" displayName="50% of Vanilla" description="Reduce vehicle prices by 50%." unique="Cost50" defaultChecked="false">CivInsanity-Option-PrixReduits.package</component>
   </componentGroup>
-  <componentGroup displayName="Firing Interval" unique="Tir">
-    <component game="GalacticAdventures" displayName="Vanilla (2 s)" description="Use the original 2-second firing interval." unique="TirVanilla" defaultChecked="true">CivInsanity-Option-TirVanilla.package</component>
-    <component game="GalacticAdventures" displayName="1.5 Seconds" description="Set the firing interval to 1.5 seconds." unique="TirModere" defaultChecked="false">CivInsanity-Option-TirModere.package</component>
-    <component game="GalacticAdventures" displayName="0.5 Seconds" description="Set the firing interval to 0.5 seconds." unique="TirRapide" defaultChecked="false">CivInsanity-Option-TirRapide.package</component>
+  <componentGroup displayName="Firing Interval" unique="FiringInterval">
+    <component game="GalacticAdventures" displayName="Vanilla (2 s)" description="Use the original 2-second firing interval." unique="FiringVanilla" defaultChecked="true">CivInsanity-Option-TirVanilla.package</component>
+    <component game="GalacticAdventures" displayName="1.5 Seconds" description="Set the firing interval to 1.5 seconds." unique="Firing1500ms" defaultChecked="false">CivInsanity-Option-TirModere.package</component>
+    <component game="GalacticAdventures" displayName="0.5 Seconds" description="Set the firing interval to 0.5 seconds." unique="Firing500ms" defaultChecked="false">CivInsanity-Option-TirRapide.package</component>
   </componentGroup>
-  <componentGroup displayName="Vehicle Speed" unique="Vitesse">
-    <component game="GalacticAdventures" displayName="Vanilla (1x)" description="Use the original vehicle speeds." unique="VitesseVanilla" defaultChecked="true">CivInsanity-Option-VitesseVanilla.package</component>
-    <component game="GalacticAdventures" displayName="125% of Vanilla" description="Increase land, sea and air vehicle speed by 25%." unique="Vitesse125" defaultChecked="false">CivInsanity-Option-Vitesse125.package</component>
-    <component game="GalacticAdventures" displayName="150% of Vanilla" description="Increase land, sea and air vehicle speed by 50%." unique="Vitesse150" defaultChecked="false">CivInsanity-Option-Vitesse150.package</component>
+  <componentGroup displayName="Vehicle Speed" unique="VehicleSpeed">
+    <component game="GalacticAdventures" displayName="Vanilla (1x)" description="Use the original vehicle speeds." unique="SpeedVanilla" defaultChecked="true">CivInsanity-Option-VitesseVanilla.package</component>
+    <component game="GalacticAdventures" displayName="125% of Vanilla" description="Increase land, sea and air vehicle speed by 25%." unique="Speed125" defaultChecked="false">CivInsanity-Option-Vitesse125.package</component>
+    <component game="GalacticAdventures" displayName="150% of Vanilla" description="Increase land, sea and air vehicle speed by 50%." unique="Speed150" defaultChecked="false">CivInsanity-Option-Vitesse150.package</component>
   </componentGroup>
-  <componentGroup displayName="Offensive Units" unique="Offensifs">
-    <component game="GalacticAdventures" displayName="Vanilla (8)" description="Use the default target of 8 offensive units during Civilization planet generation." unique="OffensifsVanilla" defaultChecked="true">CivInsanity-Option-OffensifsVanilla.package</component>
-    <component game="GalacticAdventures" displayName="12 Units" description="Set the offensive unit target to 12 during planet generation." unique="Offensifs12" defaultChecked="false">CivInsanity-Option-Offensifs12.package</component>
-    <component game="GalacticAdventures" displayName="16 Units" description="Set the offensive unit target to 16 during planet generation." unique="Offensifs16" defaultChecked="false">CivInsanity-Option-Offensifs16.package</component>
+  <componentGroup displayName="Offensive Units" unique="OffensiveUnits">
+    <component game="GalacticAdventures" displayName="Vanilla (8)" description="Use the default target of 8 offensive units during Civilization planet generation." unique="OffensiveUnitsVanilla" defaultChecked="true">CivInsanity-Option-OffensifsVanilla.package</component>
+    <component game="GalacticAdventures" displayName="12 Units" description="Set the offensive unit target to 12 during planet generation." unique="OffensiveUnits12" defaultChecked="false">CivInsanity-Option-Offensifs12.package</component>
+    <component game="GalacticAdventures" displayName="16 Units" description="Set the offensive unit target to 16 during planet generation." unique="OffensiveUnits16" defaultChecked="false">CivInsanity-Option-Offensifs16.package</component>
   </componentGroup>
-  <componentGroup displayName="AI Population" unique="Population">
+  <componentGroup displayName="AI Population" unique="AIPopulation">
     <component game="GalacticAdventures" displayName="Vanilla (15)" description="Each rival starts with a population of 15." unique="PopulationVanilla" defaultChecked="true">CivInsanity-Option-PopulationVanilla.package</component>
-    <component game="GalacticAdventures" displayName="30 per Rival" description="Each rival starts with a population of 30." unique="PopulationEgale30" defaultChecked="false">CivInsanity-Option-PopulationEgale30.package</component>
-    <component game="GalacticAdventures" displayName="15-50 per Rival" description="Rivals start with a population between 15 and 50." unique="PopulationVariable" defaultChecked="false">CivInsanity-Option-PopulationVariable.package</component>
+    <component game="GalacticAdventures" displayName="30 per Rival" description="Each rival starts with a population of 30." unique="Population30" defaultChecked="false">CivInsanity-Option-PopulationEgale30.package</component>
+    <component game="GalacticAdventures" displayName="15-50 per Rival" description="Rivals start with a population between 15 and 50." unique="Population15To50" defaultChecked="false">CivInsanity-Option-PopulationVariable.package</component>
   </componentGroup>
-  <componentGroup displayName="AI Starting Funds" unique="Tresorerie">
-    <component game="GalacticAdventures" displayName="Vanilla (4,000)" description="Each rival starts with 4,000 Sporebucks." unique="TresorerieVanilla" defaultChecked="true">CivInsanity-Option-TresorerieVanilla.package</component>
-    <component game="GalacticAdventures" displayName="8,000 per Rival" description="Each rival starts with 8,000 Sporebucks." unique="TresorerieEgale8000" defaultChecked="false">CivInsanity-Option-TresorerieEgale8000.package</component>
-    <component game="GalacticAdventures" displayName="4,000-15,000" description="Rivals start with between 4,000 and 15,000 Sporebucks." unique="TresorerieVariable" defaultChecked="false">CivInsanity-Option-TresorerieVariable.package</component>
+  <componentGroup displayName="AI Starting Funds" unique="AIStartingFunds">
+    <component game="GalacticAdventures" displayName="Vanilla (4,000)" description="Each rival starts with 4,000 Sporebucks." unique="FundsVanilla" defaultChecked="true">CivInsanity-Option-TresorerieVanilla.package</component>
+    <component game="GalacticAdventures" displayName="8,000 per Rival" description="Each rival starts with 8,000 Sporebucks." unique="Funds8000" defaultChecked="false">CivInsanity-Option-TresorerieEgale8000.package</component>
+    <component game="GalacticAdventures" displayName="4,000-15,000" description="Rivals start with between 4,000 and 15,000 Sporebucks." unique="Funds4000To15000" defaultChecked="false">CivInsanity-Option-TresorerieVariable.package</component>
   </componentGroup>
-  <componentGroup displayName="AI Specialties" unique="Specialites">
-    <component game="GalacticAdventures" displayName="Equal Odds" description="Each rival has an equal chance of being military, religious or economic." unique="TroisSpecialites" defaultChecked="true">CivInsanity-Option-TroisSpecialites.package</component>
-    <component game="GalacticAdventures" displayName="No Military" description="Rivals have a 50/50 chance of being religious or economic." unique="SansMilitaires" defaultChecked="false">CivInsanity-Option-SansMilitaires.package</component>
-    <component game="GalacticAdventures" displayName="No Religious" description="Rivals have a 50/50 chance of being military or economic." unique="SansReligieuses" defaultChecked="false">CivInsanity-Option-SansReligieuses.package</component>
-    <component game="GalacticAdventures" displayName="No Economic" description="Rivals have a 50/50 chance of being military or religious." unique="SansEconomiques" defaultChecked="false">CivInsanity-Option-SansEconomiques.package</component>
-    <component game="GalacticAdventures" displayName="Military Only" description="All rivals start as military nations." unique="MilitairesSeulement" defaultChecked="false">CivInsanity-Option-MilitairesSeulement.package</component>
-    <component game="GalacticAdventures" displayName="Religious Only" description="All rivals start as religious nations." unique="ReligieusesSeulement" defaultChecked="false">CivInsanity-Option-ReligieusesSeulement.package</component>
-    <component game="GalacticAdventures" displayName="Economic Only" description="All rivals start as economic nations." unique="EconomiquesSeulement" defaultChecked="false">CivInsanity-Option-EconomiquesSeulement.package</component>
+  <componentGroup displayName="AI Specialties" unique="AISpecialties">
+    <component game="GalacticAdventures" displayName="Equal Odds" description="Each rival has an equal chance of being military, religious or economic." unique="EqualOdds" defaultChecked="true">CivInsanity-Option-TroisSpecialites.package</component>
+    <component game="GalacticAdventures" displayName="No Military" description="Rivals have a 50/50 chance of being religious or economic." unique="NoMilitary" defaultChecked="false">CivInsanity-Option-SansMilitaires.package</component>
+    <component game="GalacticAdventures" displayName="No Religious" description="Rivals have a 50/50 chance of being military or economic." unique="NoReligious" defaultChecked="false">CivInsanity-Option-SansReligieuses.package</component>
+    <component game="GalacticAdventures" displayName="No Economic" description="Rivals have a 50/50 chance of being military or religious." unique="NoEconomic" defaultChecked="false">CivInsanity-Option-SansEconomiques.package</component>
+    <component game="GalacticAdventures" displayName="Military Only" description="All rivals start as military nations." unique="MilitaryOnly" defaultChecked="false">CivInsanity-Option-MilitairesSeulement.package</component>
+    <component game="GalacticAdventures" displayName="Religious Only" description="All rivals start as religious nations." unique="ReligiousOnly" defaultChecked="false">CivInsanity-Option-ReligieusesSeulement.package</component>
+    <component game="GalacticAdventures" displayName="Economic Only" description="All rivals start as economic nations." unique="EconomicOnly" defaultChecked="false">CivInsanity-Option-EconomiquesSeulement.package</component>
   </componentGroup>
-  <componentGroup displayName="Captured Cities" unique="Capture">
+  <componentGroup displayName="Captured Cities" unique="CapturedCities">
     <component game="GalacticAdventures" displayName="Vanilla" description="Use the original rules for city specialties after an AI capture." unique="CaptureVanilla" defaultChecked="true">CivInsanity-Option-CaptureVanilla.package</component>
-    <component game="GalacticAdventures" displayName="Keep Specialty" description="Cities captured by a rival keep their old specialty. The player keeps the usual choice." unique="CaptureConserve" defaultChecked="false">CivInsanity-Option-CaptureConserve.package</component>
+    <component game="GalacticAdventures" displayName="Keep Specialty" description="Cities captured by a rival keep their old specialty. The player keeps the usual choice." unique="KeepSpecialty" defaultChecked="false">CivInsanity-Option-CaptureConserve.package</component>
   </componentGroup>
-  <componentGroup displayName="Turrets &amp; Fleets" unique="Tourelles">
-    <component game="GalacticAdventures" displayName="Vanilla" description="Use original turret and fleet limits. Large cities have 8 military, 6 religious or 4 economic turret slots." unique="TourellesVanilla" defaultChecked="true">CivInsanity-Option-TourellesVanilla.package</component>
-    <component game="GalacticAdventures" displayName="Max by Type (Hard)" description="On Hard, rivals aim for 8, 6 or 4 turrets by city type. Player and rival fleet caps rise by about 38% before rounding. Other difficulties use vanilla rules." unique="TourellesMaximum" defaultChecked="false">CivInsanity-Option-TourellesMaximum.package</component>
-    <component game="GalacticAdventures" displayName="8 Slots per City" description="All large cities get 8 slots. On Hard, rivals aim to fill all 8. Fleet caps rise by about 85% on Hard, 33% on Normal and 50% on Easy. Use stock city walls." unique="TourellesTous" defaultChecked="false">CivInsanity-Option-TourellesTous.package</component>
+  <componentGroup displayName="Turrets &amp; Fleets" unique="TurretsAndFleets">
+    <component game="GalacticAdventures" displayName="Vanilla" description="Use original turret and fleet limits. Large cities have 8 military, 6 religious or 4 economic turret slots." unique="TurretsVanilla" defaultChecked="true">CivInsanity-Option-TourellesVanilla.package</component>
+    <component game="GalacticAdventures" displayName="Max by Type (Hard)" description="On Hard, rivals aim for 8, 6 or 4 turrets by city type. Player and rival fleet caps rise by about 38% before rounding. Other difficulties use vanilla rules." unique="MaxByTypeOnHard" defaultChecked="false">CivInsanity-Option-TourellesMaximum.package</component>
+    <component game="GalacticAdventures" displayName="8 Slots per City" description="All large cities get 8 slots. On Hard, rivals aim to fill all 8. Fleet caps rise by about 85% on Hard, 33% on Normal and 50% on Easy. Use stock city walls." unique="EightSlotsPerCity" defaultChecked="false">CivInsanity-Option-TourellesTous.package</component>
   </componentGroup>
-  <componentGroup displayName="Rival Trade" unique="Commerce">
-    <component game="GalacticAdventures" displayName="First Rival Route" description="An economic AI can open its first rival trade route to a reachable city when both sides are at least neutral. Deliveries and buyouts follow vanilla rules." unique="PremierPartenaire" defaultChecked="true">CivInsanity-Option-PremierPartenaire.package</component>
-    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original conditions for opening trade routes." unique="CommerceVanilla" defaultChecked="false">CivInsanity-Option-CommerceVanilla.package</component>
+  <componentGroup displayName="Rival Trade" unique="RivalTrade">
+    <component game="GalacticAdventures" displayName="First Rival Route" description="An economic AI can open its first rival trade route to a reachable city when both sides are at least neutral. Deliveries and buyouts follow vanilla rules." unique="FirstRivalRoute" defaultChecked="true">CivInsanity-Option-PremierPartenaire.package</component>
+    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original conditions for opening trade routes." unique="RivalTradeVanilla" defaultChecked="false">CivInsanity-Option-CommerceVanilla.package</component>
   </componentGroup>
-  <componentGroup displayName="Trade Under Fire" unique="RepliCommercial">
-    <component game="GalacticAdventures" displayName="Stay on Course" description="Land, sea and air traders stay on course after taking a hit while opening or serving a route. They can still take damage and be destroyed." unique="MaintenirTrajet" defaultChecked="true">CivInsanity-Option-MaintenirTrajet.package</component>
-    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original retreat behavior when traders are hit." unique="RepliVanilla" defaultChecked="false">CivInsanity-Option-RepliVanilla.package</component>
+  <componentGroup displayName="Trade Under Fire" unique="TradeUnderFire">
+    <component game="GalacticAdventures" displayName="Stay on Course" description="Land, sea and air traders stay on course after taking a hit while opening or serving a route. They can still take damage and be destroyed." unique="StayOnCourse" defaultChecked="true">CivInsanity-Option-MaintenirTrajet.package</component>
+    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original retreat behavior when traders are hit." unique="RetreatVanilla" defaultChecked="false">CivInsanity-Option-RepliVanilla.package</component>
   </componentGroup>
   <prerequisite game="GalacticAdventures">CivInsanity-Specialites.package</prerequisite>
   <prerequisite>BetterCiv.dll</prerequisite>

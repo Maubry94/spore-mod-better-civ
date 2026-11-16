@@ -130,54 +130,57 @@ static RelationshipLevel relationship_level;
 static FindPlayerCivilization find_player_civilization;
 static CurrentVehicleOrder current_vehicle_order;
 
-static int matches_choice(const char *line, const char *group, const char *option)
+static int matches_choice(const char *line, const char *current, const char *legacy)
 {
-    size_t group_size = strlen(group);
-    return line[0] == '<' && strncmp(line + 1, group, group_size) == 0 &&
-           line[1 + group_size] == '>' && strcmp(line + 2 + group_size, option) == 0;
+    // The v1.0 installer writes the original identifiers into ModSettings.
+    return strcmp(line, current) == 0 || strcmp(line, legacy) == 0;
 }
 
 static void apply_option(Settings *out, const char *line)
 {
-    if (matches_choice(line, "Prix", "PrixModere")) out->cost_percent = 75;
-    if (matches_choice(line, "Prix", "PrixReduits")) out->cost_percent = 50;
-    if (matches_choice(line, "Tir", "TirModere")) out->firing_interval_percent = 75;
-    if (matches_choice(line, "Tir", "TirRapide")) out->firing_interval_percent = 25;
-    if (matches_choice(line, "Offensifs", "Offensifs12")) out->offensive_vehicles = 12;
-    if (matches_choice(line, "Offensifs", "Offensifs16")) out->offensive_vehicles = 16;
-    if (matches_choice(line, "Population", "PopulationEgale30"))
+    if (matches_choice(line, "<VehicleCost>Cost75", "<Prix>PrixModere")) out->cost_percent = 75;
+    if (matches_choice(line, "<VehicleCost>Cost50", "<Prix>PrixReduits")) out->cost_percent = 50;
+    if (matches_choice(line, "<FiringInterval>Firing1500ms", "<Tir>TirModere"))
+        out->firing_interval_percent = 75;
+    if (matches_choice(line, "<FiringInterval>Firing500ms", "<Tir>TirRapide"))
+        out->firing_interval_percent = 25;
+    if (matches_choice(line, "<OffensiveUnits>OffensiveUnits12", "<Offensifs>Offensifs12"))
+        out->offensive_vehicles = 12;
+    if (matches_choice(line, "<OffensiveUnits>OffensiveUnits16", "<Offensifs>Offensifs16"))
+        out->offensive_vehicles = 16;
+    if (matches_choice(line, "<AIPopulation>Population30", "<Population>PopulationEgale30"))
         out->population_min = out->population_max = 30;
-    if (matches_choice(line, "Population", "PopulationVariable")) {
+    if (matches_choice(line, "<AIPopulation>Population15To50", "<Population>PopulationVariable")) {
         out->population_min = 15;
         out->population_max = 50;
     }
-    if (matches_choice(line, "Tresorerie", "TresorerieEgale8000"))
+    if (matches_choice(line, "<AIStartingFunds>Funds8000", "<Tresorerie>TresorerieEgale8000"))
         out->wealth_min = out->wealth_max = 8000;
-    if (matches_choice(line, "Tresorerie", "TresorerieVariable")) {
+    if (matches_choice(line, "<AIStartingFunds>Funds4000To15000", "<Tresorerie>TresorerieVariable")) {
         out->wealth_min = 4000;
         out->wealth_max = 15000;
     }
-    if (matches_choice(line, "Specialites", "SansMilitaires"))
+    if (matches_choice(line, "<AISpecialties>NoMilitary", "<Specialites>SansMilitaires"))
         out->specialty_mask = kReligiousMask | kEconomicMask;
-    if (matches_choice(line, "Specialites", "SansReligieuses"))
+    if (matches_choice(line, "<AISpecialties>NoReligious", "<Specialites>SansReligieuses"))
         out->specialty_mask = kMilitaryMask | kEconomicMask;
-    if (matches_choice(line, "Specialites", "SansEconomiques"))
+    if (matches_choice(line, "<AISpecialties>NoEconomic", "<Specialites>SansEconomiques"))
         out->specialty_mask = kMilitaryMask | kReligiousMask;
-    if (matches_choice(line, "Specialites", "MilitairesSeulement"))
+    if (matches_choice(line, "<AISpecialties>MilitaryOnly", "<Specialites>MilitairesSeulement"))
         out->specialty_mask = kMilitaryMask;
-    if (matches_choice(line, "Specialites", "ReligieusesSeulement"))
+    if (matches_choice(line, "<AISpecialties>ReligiousOnly", "<Specialites>ReligieusesSeulement"))
         out->specialty_mask = kReligiousMask;
-    if (matches_choice(line, "Specialites", "EconomiquesSeulement"))
+    if (matches_choice(line, "<AISpecialties>EconomicOnly", "<Specialites>EconomiquesSeulement"))
         out->specialty_mask = kEconomicMask;
-    if (matches_choice(line, "Capture", "CaptureConserve"))
+    if (matches_choice(line, "<CapturedCities>KeepSpecialty", "<Capture>CaptureConserve"))
         out->keep_rival_specialty = 1;
-    if (matches_choice(line, "Tourelles", "TourellesMaximum"))
+    if (matches_choice(line, "<TurretsAndFleets>MaxByTypeOnHard", "<Tourelles>TourellesMaximum"))
         out->turrets = TURRETS_HARD_MAXIMUM;
-    if (matches_choice(line, "Tourelles", "TourellesTous"))
+    if (matches_choice(line, "<TurretsAndFleets>EightSlotsPerCity", "<Tourelles>TourellesTous"))
         out->turrets = TURRETS_ALL_SPECIALTIES;
-    if (matches_choice(line, "Commerce", "CommerceVanilla"))
+    if (matches_choice(line, "<RivalTrade>RivalTradeVanilla", "<Commerce>CommerceVanilla"))
         out->assist_rival_trade = 0;
-    if (matches_choice(line, "RepliCommercial", "RepliVanilla"))
+    if (matches_choice(line, "<TradeUnderFire>RetreatVanilla", "<RepliCommercial>RepliVanilla"))
         out->maintain_trade_under_fire = 0;
 }
 
