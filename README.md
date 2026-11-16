@@ -11,7 +11,7 @@ Ten major cities and configurable rules for Spore's Civilization Stage. The play
 
 Download the `.sporemod` from [Releases](https://github.com/Maubry94/spore-mod-better-civ/releases). This build targets Steam Galactic Adventures 3.1.0.29 with the Spore ModAPI Launcher Kit.
 
-Remove earlier Civ Insanity and Better Civ test builds, then install the archive with the Spore ModAPI Easy Installer. Start a new Civilization game to apply city generation and starting settings. The **8 Slots per City** mode is designed for the stock city walls.
+Install the archive with the Spore ModAPI Easy Installer. Start a new Civilization game to apply city generation and starting settings. The **8 Slots per City** mode is designed for the stock city walls.
 
 ## Build the DLL
 
