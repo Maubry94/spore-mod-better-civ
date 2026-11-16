@@ -19,7 +19,7 @@ Use a Windows x86 MinGW-w64 GCC toolchain and Python 3.10 or later. Run these co
 
 ```powershell
 New-Item -ItemType Directory -Force dist | Out-Null
-i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -shared -static-libgcc "-Wl,--nxcompat" "-Wl,--dynamicbase" "-Wl,--image-base,0x6d280000" -o "dist/BetterCiv.dll" "src/grandes-villes.c"
+i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -shared -static-libgcc "-Wl,--nxcompat" "-Wl,--dynamicbase" "-Wl,--image-base,0x6d280000" -o "dist/BetterCiv.dll" "src/better-civ.c"
 ```
 
 With the x86 edition of w64devkit, the compiler is named `gcc`.
@@ -40,7 +40,7 @@ The tests cover option loading and the DLL's changes against a compatible execut
 
 ```powershell
 New-Item -ItemType Directory -Force tests/mLibs | Out-Null
-i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -static-libgcc -I src -o tests/mLibs/test-better-civ.exe tests/test-grandes-villes.c
+i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -static-libgcc -I src -o tests/mLibs/test-better-civ.exe tests/test-better-civ.c
 & ./tests/mLibs/test-better-civ.exe "C:/path/to/SporeApp_ModAPIFix.exe"
 ```
 
