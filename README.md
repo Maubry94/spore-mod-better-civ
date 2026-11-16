@@ -15,35 +15,40 @@ Install the archive with the Spore ModAPI Easy Installer. Start a new Civilizati
 
 ## Build the DLL
 
-Use a Windows x86 MinGW-w64 GCC toolchain and Python 3.10 or later. Run these commands from the repository root in PowerShell.
+This branch migrates the DLL to C++17, MSVC and the Spore ModAPI SDK. Gameplay settings and packaged game data are unchanged. The published v1.0 release remains the reference build until in-game regression testing is complete.
+
+Install Visual Studio 2022 (or its Build Tools) with **MSVC v143 C++ x86/x64 build tools** and a **Windows 10 or 11 SDK**. Get the [Spore ModAPI SDK](https://github.com/Spore-Community/Spore-ModAPI) and the ModAPI Launcher Kit. The tested SDK revision is recorded in `sdk-version.txt`.
+
+Run these commands from the repository root in PowerShell. Paths are examples; use your own SDK and launcher directories. The build writes to `dist`, never into the game or the installed mod directory.
 
 ```powershell
-New-Item -ItemType Directory -Force dist | Out-Null
-i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -shared -static-libgcc "-Wl,--nxcompat" "-Wl,--dynamicbase" "-Wl,--image-base,0x6d280000" -o "dist/BetterCiv.dll" "src/better-civ.c"
+./tools/build.ps1 -SporeSdkPath "C:/dev/Spore-ModAPI" -SporeLauncherPath "C:/path/to/Spore ModAPI Launcher Kit"
 ```
 
-With the x86 edition of w64devkit, the compiler is named `gcc`.
+The output is `dist/Release/BetterCiv.dll`. Keep the accompanying `BetterCiv.pdb` for debugging this exact build. To use Visual Studio directly, copy `SdkPaths.example.props` to `SdkPaths.props`, fill in the two paths, and open `BetterCiv.vcxproj`. Build **Release / Win32**. The CRT is linked statically; the DLL imports the installed `SporeModAPI.dll`.
 
 ## Build a .sporemod
 
 `ModInfo.xml` contains the installer text, option IDs, and package names. The release archive supplies the packaged game data, including speed presets and turret layouts. Open those packages in SporeModder FX to inspect or edit their resources. The packaging script combines those packages with the manifest and rebuilt DLL.
 
 ```powershell
-python tools/package.py "./Better Civ.sporemod" "dist/BetterCiv.dll" "dist/Better Civ rebuilt.sporemod"
+python tools/package.py "./Better Civ.sporemod" "dist/Release/BetterCiv.dll" "dist/Better Civ SDK test.sporemod"
 ```
 
-Use the v1.0 release as the game-data input for this revision.
+Use Python 3.10 or later and the v1.0 release as the game-data input for this revision. The destination must not already exist. Internal `.package` filenames and legacy settings IDs remain compatible with v1.0.
 
 ## Run the tests
 
-The tests cover option loading and the DLL's changes against a compatible executable built from the October 2024 Steam version. Supply your own compatible unpacked executable for this test. The retail executable can be packed on disk.
+The tests cover option loading, specialty selection, capture rules, rival trade, trader retreat, fleet scaling, x86 calling conventions, and instruction checks against a compatible executable built from the October 2024 Steam version. Supply your own compatible unpacked executable. The retail executable can be packed on disk. Assertions remain enabled in both test configurations.
 
 ```powershell
-New-Item -ItemType Directory -Force tests/mLibs | Out-Null
-i686-w64-mingw32-gcc -std=c17 -O2 -Wall -Wextra -Werror -static-libgcc -I src -o tests/mLibs/test-better-civ.exe tests/test-better-civ.c
-& ./tests/mLibs/test-better-civ.exe "C:/path/to/SporeApp_ModAPIFix.exe"
+./tools/build.ps1 -SporeSdkPath "C:/dev/Spore-ModAPI" -SporeLauncherPath "C:/path/to/Spore ModAPI Launcher Kit" -ReferenceExecutable "C:/path/to/SporeApp_ModAPIFix.exe"
 ```
+
+These are offline checks, not an in-game stability guarantee. See [the migration notes](docs/MIGRATION.md) for the retained native hooks and the playtest checklist.
 
 ## Credits
 
 Based on [Civ Insanity by NeDether](https://github.com/NeDether/Civ-Insanity). The optional eight-turret layout uses turret positions from [City Walls](https://www.nexusmods.com/spore/mods/10).
+
+The C++ build uses the [Spore ModAPI SDK](https://github.com/Spore-Community/Spore-ModAPI) and its CppRevEng adapters. SDK headers and libraries are external dependencies and are not bundled in the mod archive.

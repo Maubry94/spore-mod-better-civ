@@ -1,6 +1,36 @@
-#include "better-civ.c"
+#include "better-civ.cpp"
+using namespace BetterCiv;
 #include <assert.h>
 #include <stdio.h>
+
+enum {
+    kSiteMinorNation=0x25, kSiteSpecialty=0x28, kCityIsPlayerOwned=0x33c,
+    kTurretSlotsBegin=0x504, kTurretSlotsEnd=0x508, kCivIsPlayerOwned=0x89,
+    kCivCitiesBegin=0x9c, kCivCitiesEnd=0xa0, kCivVehiclesBegin=0xb0, kCivVehiclesEnd=0xb4,
+    kCityTradePartnersBegin=0x55c, kCityTradePartnersEnd=0x560,
+    kVehiclePurpose=0xb20, kVehicleHitFlag=0xbcc
+};
+struct TradePartner { uint32_t political_id; void* route; int type; };
+using PoliticalId=uint32_t (__thiscall*)(const void*);
+static const void* read_pointer(const void* object, size_t offset) {
+    const void* value;
+    memcpy(&value, static_cast<const unsigned char*>(object)+offset, sizeof value);
+    return value;
+}
+
+
+// Call each SDK adapter with the engine's __thiscall ABI, including stack
+// cleanup and floating-point returns, rather than its convenient C++ signature.
+static const float* call_configured_price(void* object) { return reinterpret_cast<ReadFloatProperty>(configured_price::detoured_function)(static_cast<App::Property*>(object)); }
+static const float* call_configured_firing_interval(void* object) { return reinterpret_cast<ReadFloatProperty>(configured_firing_interval::detoured_function)(static_cast<App::Property*>(object)); }
+static float call_configured_civ_generation(void* object, const char* name) { return reinterpret_cast<ReadScriptFloat>(configured_civ_generation::detoured_function)(static_cast<App::cArithmeticaResource*>(object), name); }
+static float call_configured_starting_vehicles(void* object, const char* name) { return reinterpret_cast<ReadScriptFloat>(configured_starting_vehicles::detoured_function)(static_cast<App::cArithmeticaResource*>(object), name); }
+static int call_configured_fleet_capacity(void* object, int specialty) { return reinterpret_cast<FleetCapacityFunction>(configured_fleet_capacity::detoured_function)(static_cast<Civilization*>(object), specialty); }
+static int call_defensive_building_count(void* object) { return reinterpret_cast<CityCountFunction>(defensive_building_count::detoured_function)(static_cast<City*>(object)); }
+static int call_extended_turret_limit(void* object) { return reinterpret_cast<TurretLimitFunction>(extended_turret_limit::detoured_function)(static_cast<City*>(object)); }
+static int call_defensive_capacity_target(void* object) { return reinterpret_cast<CityCountFunction>(defensive_capacity_target::detoured_function)(static_cast<City*>(object)); }
+static void call_retain_rival_city_specialty(void* object, int specialty, int walls) { return reinterpret_cast<SetSpecialtyFunction>(retain_rival_city_specialty::detoured_function)(static_cast<City*>(object), specialty, walls); }
+static float call_trade_acceptance(void* object, void* city, void* civilization) { return reinterpret_cast<TradeAcceptance>(trade_acceptance::detoured_function)(static_cast<Native::TradeTuning*>(object), static_cast<City*>(city), static_cast<Civilization*>(civilization)); }
 
 static unsigned current_mode;
 static unsigned char observed_status;
@@ -10,11 +40,11 @@ static unsigned number_of_draws;
 static int specialty_changes;
 static int last_specialty;
 static int difficulty = 2;
-static int __attribute__((thiscall)) mock_building_count(unsigned char *city) { (void)city; return 3; }
-static int __attribute__((thiscall)) mock_allowed_turret_count(unsigned char *city) { (void)city; return 8; }
+static int __fastcall mock_building_count(unsigned char *city, int) { (void)city; return 3; }
+static int __fastcall mock_allowed_turret_count(unsigned char *city, int) { (void)city; return 8; }
 static void *__cdecl mock_context(void) { return &difficulty; }
-static void *__attribute__((thiscall)) mock_settings(void *context) { return context; }
-static int __attribute__((thiscall)) mock_difficulty(void *settings) { return *(int *)settings; }
+static void *__fastcall mock_settings(void *context, int) { return context; }
+static int __fastcall mock_difficulty(void *scenario, int) { return *(int *)scenario; }
 
 static uint32_t __cdecl mock_mode(void) { return current_mode; }
 static void *__cdecl mock_found(unsigned char *site) {
@@ -22,16 +52,16 @@ static void *__cdecl mock_found(unsigned char *site) {
     memcpy(&observed_site_specialty, site + kSiteSpecialty, sizeof observed_site_specialty);
     return site;
 }
-static unsigned __attribute__((thiscall)) mock_random(void *state, unsigned bound) {
+static unsigned __fastcall mock_random(void *state, int, unsigned bound) {
     assert(state == &mock_draw && bound == 2 && mock_draw < bound);
     ++number_of_draws;
     return mock_draw;
 }
-static int __attribute__((thiscall)) mock_limit(unsigned char *city) {
+static int __fastcall mock_limit(unsigned char *city, int) {
     (void)city;
     return 4;
 }
-static void __attribute__((thiscall)) mock_specialty(unsigned char *city, int kind, int walls) {
+static void __fastcall mock_specialty(unsigned char *city, int, int kind, int walls) {
     (void)city;
     (void)walls;
     ++specialty_changes;
@@ -46,12 +76,12 @@ static const uint32_t optional_sites[] = {
 };
 
 static const uintptr_t optional_targets[] = {
-    (uintptr_t)configured_price, (uintptr_t)configured_firing_interval,
-    (uintptr_t)configured_civ_generation, (uintptr_t)configured_civ_generation,
-    (uintptr_t)configured_civ_generation, (uintptr_t)configured_civ_generation,
-    (uintptr_t)configured_civ_generation, (uintptr_t)configured_civ_generation,
-    (uintptr_t)configured_civ_generation, (uintptr_t)configured_civ_generation,
-    (uintptr_t)configured_starting_vehicles,
+    (uintptr_t)configured_price::detoured_function, (uintptr_t)configured_firing_interval::detoured_function,
+    (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
+    (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
+    (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
+    (uintptr_t)configured_civ_generation::detoured_function, (uintptr_t)configured_civ_generation::detoured_function,
+    (uintptr_t)configured_starting_vehicles::detoured_function,
 };
 
 static const Settings defaults = {
@@ -61,18 +91,18 @@ static const Settings mixed = {
     75, 25, 12, 30, 30, 4000, 15000, kMilitaryMask | kEconomicMask, 1, TURRETS_ALL_SPECIALTIES, 0, 0,
 };
 
-static const float *__attribute__((thiscall)) mock_read_float(void *property)
+static const float *__fastcall mock_read_float(void *property, int)
 {
-    return property;
+    return static_cast<const float*>(property);
 }
 
-static int __attribute__((thiscall)) mock_fleet_capacity(void *civilization, int specialty)
+static int __fastcall mock_fleet_capacity(void *civilization, int, int specialty)
 {
     (void)specialty;
     return *(int *)civilization;
 }
 
-static float __attribute__((thiscall)) mock_read_script(void *script, const char *name)
+static float __fastcall mock_read_script(void *script, int, const char *name)
 {
     (void)name;
     return *(const float *)script;
@@ -109,30 +139,30 @@ static void verify_settings(void)
     load_options();
     assert(memcmp(&settings, &mixed, sizeof settings) == 0);
 
-    read_float_property = mock_read_float;
-    read_script_float = mock_read_script;
+    read_float_property = reinterpret_cast<decltype(read_float_property)>(mock_read_float);
+    read_script_float = reinterpret_cast<decltype(read_script_float)>(mock_read_script);
     float cost = 1000.0f;
     float firing_interval = 2.0f;
     current_mode = kCivilizationMode;
-    assert(*configured_price(&cost) == 750.0f);
-    assert(*configured_firing_interval(&firing_interval) == 0.5f);
-    assert(configured_starting_vehicles(&cost, "num_offensive_vehicles") == 12.0f);
-    assert(configured_starting_vehicles(&cost, "num_harvesters") == cost);
-    assert(configured_civ_generation(&cost, "population_min") == 30.0f);
-    assert(configured_civ_generation(&cost, "population_max") == 30.0f);
-    assert(configured_civ_generation(&cost, "wealth_min") == 4000.0f);
-    assert(configured_civ_generation(&cost, "wealth_max") == 15000.0f);
+    assert(*call_configured_price(&cost) == 750.0f);
+    assert(*call_configured_firing_interval(&firing_interval) == 0.5f);
+    assert(call_configured_starting_vehicles(&cost, "num_offensive_vehicles") == 12.0f);
+    assert(call_configured_starting_vehicles(&cost, "num_harvesters") == cost);
+    assert(call_configured_civ_generation(&cost, "population_min") == 30.0f);
+    assert(call_configured_civ_generation(&cost, "population_max") == 30.0f);
+    assert(call_configured_civ_generation(&cost, "wealth_min") == 4000.0f);
+    assert(call_configured_civ_generation(&cost, "wealth_max") == 15000.0f);
     settings.wealth_min = settings.wealth_max = 4000;
-    assert(configured_civ_generation(&cost, "wealth_min") == cost);
+    assert(call_configured_civ_generation(&cost, "wealth_min") == cost);
     current_mode = 0;
-    assert(configured_price(&cost) == &cost);
-    assert(configured_firing_interval(&firing_interval) == &firing_interval);
+    assert(call_configured_price(&cost) == &cost);
+    assert(call_configured_firing_interval(&firing_interval) == &firing_interval);
     settings = defaults;
 }
 
 static void verify_fleet_capacity(void)
 {
-    original_fleet_capacity = mock_fleet_capacity;
+    original_fleet_capacity = reinterpret_cast<decltype(original_fleet_capacity)>(mock_fleet_capacity);
     const TurretMode modes[] = {TURRETS_VANILLA, TURRETS_HARD_MAXIMUM, TURRETS_ALL_SPECIALTIES};
     const int expected[][3] = {{4, 4, 4}, {4, 4, 6}, {6, 5, 7}};
     int native = 4;
@@ -141,11 +171,11 @@ static void verify_fleet_capacity(void)
         current_mode = kCivilizationMode;
         for (difficulty = kDifficultyEasy; difficulty <= kDifficultyHard; ++difficulty) {
             for (int specialty = kMilitary; specialty <= kEconomic; ++specialty)
-                assert(configured_fleet_capacity(&native, specialty) == expected[mode][difficulty]);
-            assert(configured_fleet_capacity(&native, 4) == native);
+                assert(call_configured_fleet_capacity(&native, specialty) == expected[mode][difficulty]);
+            assert(call_configured_fleet_capacity(&native, 4) == native);
         }
         current_mode = 0;
-        assert(configured_fleet_capacity(&native, kMilitary) == native);
+        assert(call_configured_fleet_capacity(&native, kMilitary) == native);
     }
     assert(fleet_capacity_with_defenses(0, TURRETS_ALL_SPECIALTIES, kDifficultyHard) == 0);
     assert(fleet_capacity_with_defenses(24, TURRETS_ALL_SPECIALTIES, kDifficultyHard) == 36);
@@ -166,7 +196,7 @@ static void verify_foundation(unsigned char *site)
         {kMilitary, kReligious}, {kMilitary, kMilitary}, {kReligious, kReligious},
         {kEconomic, kEconomic},
     };
-    random_below = mock_random;
+    random_below = reinterpret_cast<decltype(random_below)>(mock_random);
     simulation_random = &mock_draw;
     for (size_t i = 0; i < sizeof options / sizeof options[0]; ++i) {
         char line[80];
@@ -178,10 +208,10 @@ static void verify_foundation(unsigned char *site)
             memcpy(site + kSiteSpecialty, &native, sizeof native);
             current_mode = 0;
             site[kSiteMinorNation] = 1;
-            assert(found_major_city(site) == site && observed_status == 1);
+            assert(found_major_city(reinterpret_cast<Native::CityFoundation*>(site)) == reinterpret_cast<City*>(site) && observed_status == 1);
             assert(observed_site_specialty == native);
             current_mode = kCivilizationMode;
-            assert(found_major_city(site) == site && observed_status == 0);
+            assert(found_major_city(reinterpret_cast<Native::CityFoundation*>(site)) == reinterpret_cast<City*>(site) && observed_status == 0);
             assert(observed_site_specialty == specialties[i][mock_draw]);
         }
     }
@@ -195,19 +225,19 @@ static int partner_opinion = 2;
 static int origin_opinion = 2;
 static float native_trade;
 
-static float __attribute__((thiscall)) mock_trade(void *tuning, void *city, void *civ)
+static float __fastcall mock_trade(void *tuning, int, void *city, void *civ)
 { (void)tuning; (void)city; (void)civ; return native_trade; }
-static void *__attribute__((thiscall)) mock_city_owner(void *city)
+static void *__fastcall mock_city_owner(void *city, int)
 { return (void *)read_pointer(city, 0x590); }
-static int __attribute__((thiscall)) mock_strategy(void *civ)
+static int __fastcall mock_strategy(void *civ, int)
 { (void)civ; return trade_strategy; }
-static const VehicleOrder *__attribute__((thiscall)) mock_order(void *vehicle)
-{ return vehicle; }
-static void *__attribute__((thiscall)) mock_player(void *context)
+static const VehicleOrder *__fastcall mock_order(void *vehicle, int)
+{ return static_cast<const VehicleOrder*>(vehicle); }
+static void *__fastcall mock_player(void *context, int)
 { (void)context; return trade_player; }
-static uint32_t __attribute__((thiscall)) mock_political_id(const void *civ)
+static uint32_t __fastcall mock_political_id(const void *civ, int)
 { return ((const unsigned char *)civ)[0x24]; }
-static int __attribute__((thiscall)) mock_relationship(void *manager, uint32_t from, uint32_t to, int fresh)
+static int __fastcall mock_relationship(void *manager, int, uint32_t from, uint32_t to, int fresh)
 {
     assert(manager && fresh && ((from == 1 && to == 2) || (from == 2 && to == 1)));
     return from == 1 ? origin_opinion : partner_opinion;
@@ -220,7 +250,7 @@ static void put_pointer(void *object, size_t offset, const void *value)
 
 static VehicleOrder trade_order;
 
-static const VehicleOrder *__attribute__((thiscall)) mock_trade_order(void *vehicle)
+static const VehicleOrder *__fastcall mock_trade_order(void *vehicle, int)
 {
     (void)vehicle;
     return &trade_order;
@@ -233,8 +263,8 @@ static void verify_trade_under_fire(float (__cdecl *predicate)(void *))
     const uint32_t locomotions[] = {0, 1, 2};  // land, water, air
     const uint32_t economic = kEconomic;
     const uint32_t military = kMilitary;
-    game_mode = mock_mode;
-    current_vehicle_order = mock_trade_order;
+    game_mode = reinterpret_cast<decltype(game_mode)>(mock_mode);
+    current_vehicle_order = reinterpret_cast<decltype(current_vehicle_order)>(mock_trade_order);
     current_mode = kCivilizationMode;
     trade_order.target = vehicle;
     trade_order.kind = kTradeDeliveryOrder;
@@ -266,7 +296,7 @@ static void verify_rival_trade(void)
     unsigned char origin[0xb8] = {0}, partner[0xa4] = {0};
     unsigned char home[0x594] = {0}, target[0x594] = {0}, other[0x594] = {0};
     unsigned char vtable[0x50] = {0};
-    PoliticalId getter = mock_political_id;
+    PoliticalId getter = reinterpret_cast<decltype(getter)>(mock_political_id);
     memcpy(vtable + 0x4c, &getter, sizeof getter);
     put_pointer(origin, 0, vtable);
     put_pointer(partner, 0, vtable);
@@ -288,40 +318,40 @@ static void verify_rival_trade(void)
     put_pointer(origin, kCivVehiclesBegin, vehicles);
     put_pointer(origin, kCivVehiclesEnd, vehicles + 1);
 
-    original_trade_acceptance = mock_trade;
-    city_owner = mock_city_owner;
-    civilization_strategy = mock_strategy;
-    relationship_manager = mock_context;
-    relationship_level = mock_relationship;
-    find_player_civilization = mock_player;
-    current_vehicle_order = mock_order;
+    original_trade_acceptance = reinterpret_cast<decltype(original_trade_acceptance)>(mock_trade);
+    city_owner = reinterpret_cast<decltype(city_owner)>(mock_city_owner);
+    civilization_strategy = reinterpret_cast<decltype(civilization_strategy)>(mock_strategy);
+    relationship_manager = reinterpret_cast<decltype(relationship_manager)>(mock_context);
+    relationship_level = reinterpret_cast<decltype(relationship_level)>(mock_relationship);
+    find_player_civilization = reinterpret_cast<decltype(find_player_civilization)>(mock_player);
+    current_vehicle_order = reinterpret_cast<decltype(current_vehicle_order)>(mock_order);
     trade_strategy = kCivEconomicStrategy;
     current_mode = kCivilizationMode;
-    assert(trade_acceptance(NULL, target, origin) == 1.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 1.0f);
     current_mode = 0;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     current_mode = kCivilizationMode;
     order.kind = kCreateTradeRouteOrder;
     order.target = other;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     order.target = target;
-    assert(trade_acceptance(NULL, target, origin) == 1.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 1.0f);
     route.political_id = 2;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     route.political_id = 3;
     partner_opinion = 1;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     partner_opinion = 2;
     origin_opinion = 0;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     origin_opinion = 2;
     trade_strategy = 0;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     trade_strategy = kCivEconomicStrategy;
     partner[kCivIsPlayerOwned] = 1;
-    assert(trade_acceptance(NULL, target, origin) == 0.0f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     native_trade = 0.6f;
-    assert(trade_acceptance(NULL, target, origin) == 0.6f);
+    assert(call_trade_acceptance(NULL, target, origin) == 0.6f);
 }
 
 static void verify_reference_writes(const char *path, int variant)
@@ -332,14 +362,14 @@ static void verify_reference_writes(const char *path, int variant)
     long size = ftell(file);
     assert(size > 0);
     rewind(file);
-    unsigned char *disk = HeapAlloc(GetProcessHeap(), 0, (size_t)size);
+    unsigned char *disk = static_cast<unsigned char*>(HeapAlloc(GetProcessHeap(), 0, (size_t)size));
     assert(disk && fread(disk, 1, (size_t)size, file) == (size_t)size);
     fclose(file);
 
     IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)disk;
     IMAGE_NT_HEADERS32 *header = (IMAGE_NT_HEADERS32 *)(disk + dos->e_lfanew);
-    unsigned char *image = VirtualAlloc(NULL, kSteamOctober2024ImageSize,
-                                        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    unsigned char *image = static_cast<unsigned char*>(VirtualAlloc(NULL, kSteamOctober2024ImageSize,
+                                        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
     assert(image);
     memcpy(image, disk, header->OptionalHeader.SizeOfHeaders);
     IMAGE_SECTION_HEADER *section = IMAGE_FIRST_SECTION(header);
@@ -354,6 +384,13 @@ static void verify_reference_writes(const char *path, int variant)
     unsigned char *editor = image + 0xd07e1a - kReferenceBase;
     unsigned char *capture = image + 0xbe8e51 - kReferenceBase;
     unsigned char *retreat = image + kVehicleRetreatCondition - kReferenceBase;
+
+    image_header->FileHeader.TimeDateStamp ^= 1;
+    assert(!install_rules(image) && founding[1] == 0x4b);
+    image_header->FileHeader.TimeDateStamp ^= 1;
+    image_header->FileHeader.Machine = IMAGE_FILE_MACHINE_AMD64;
+    assert(!install_rules(image) && founding[1] == 0x4b);
+    image_header->FileHeader.Machine = IMAGE_FILE_MACHINE_I386;
 
     const int use_options = variant == 1;
     settings = use_options ? mixed : defaults;
@@ -382,9 +419,9 @@ static void verify_reference_writes(const char *path, int variant)
     image_header->OptionalHeader.SizeOfImage = kSteamOctober2024ImageSize;
     unsigned char *sites[] = {founding, limit, editor, capture,
       image + 0xbe8c2c - kReferenceBase, image + 0xbe5c45 - kReferenceBase, image + 0xbe5cc4 - kReferenceBase};
-    uintptr_t targets[] = {(uintptr_t)found_major_city, (uintptr_t)extended_turret_limit,
-                           (uintptr_t)extended_turret_limit, (uintptr_t)retain_rival_city_specialty,
-                           (uintptr_t)retain_rival_city_specialty, (uintptr_t)defensive_capacity_target, (uintptr_t)defensive_building_count};
+    uintptr_t targets[] = {(uintptr_t)found_major_city, (uintptr_t)extended_turret_limit::detoured_function,
+                           (uintptr_t)extended_turret_limit::detoured_function, (uintptr_t)retain_rival_city_specialty::detoured_function,
+                           (uintptr_t)retain_rival_city_specialty::detoured_function, (uintptr_t)defensive_capacity_target::detoured_function, (uintptr_t)defensive_building_count::detoured_function};
     int enabled[] = {1, variant == 1, variant == 1, variant == 1,
                      variant == 1, variant != 0, variant != 0};
     uint32_t fleet_sites[] = {0xbd7325, 0xbf228a, 0xbf686f, 0xbf6afa, 0xd07c73,
@@ -434,7 +471,7 @@ static void verify_reference_writes(const char *path, int variant)
         uint32_t relative;
         memcpy(&relative, site + 1, 4);
         uintptr_t target = variant == 0 ? (uintptr_t)(image + 0xbf2110 - kReferenceBase)
-                                        : (uintptr_t)configured_fleet_capacity;
+                                        : (uintptr_t)configured_fleet_capacity::detoured_function;
         assert(site[0] == 0xe8 && (uintptr_t)site + 5 + relative == target);
     }
     const uint32_t commerce_sites[] = {0xbfb446, 0xbfb7bc, 0xdca391};
@@ -443,7 +480,7 @@ static void verify_reference_writes(const char *path, int variant)
         uint32_t relative;
         memcpy(&relative, site + 1, 4);
         uintptr_t target = use_options ? (uintptr_t)(image + 0xceef90 - kReferenceBase)
-                                       : (uintptr_t)trade_acceptance;
+                                       : (uintptr_t)trade_acceptance::detoured_function;
         assert(site[0] == 0xe8 && (uintptr_t)site + 5 + relative == target);
     }
     MEMORY_BASIC_INFORMATION page;
@@ -455,12 +492,27 @@ static void verify_reference_writes(const char *path, int variant)
 
 int main(int argc, char *argv[])
 {
+    if (argc == 4 && strcmp(argv[1], "--loader") == 0) {
+        // Load the shim explicitly from an isolated test directory. The actual
+        // mod's DllMain must register with it through its real DLL imports.
+        HMODULE shim = LoadLibraryExA(argv[2], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        assert(shim);
+        HMODULE mod = LoadLibraryExA(argv[3], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        assert(mod);
+        auto run = reinterpret_cast<int (__cdecl*)()>(GetProcAddress(shim, "RunRegisteredInitialization"));
+        assert(run && run() == 1);
+        // The host is this test executable, so activation must fail cleanly.
+        assert(FreeLibrary(mod));
+        assert(FreeLibrary(shim));
+        puts("DLL load, SDK initialization registration and unsupported-host rejection passed.");
+        return 0;
+    }
     unsigned char site[0x64] = {0};
     unsigned char city[0x818] = {0};
-    game_mode = mock_mode;
-    original_found_city = mock_found;
-    original_turret_limit = mock_limit;
-    original_set_specialty = mock_specialty;
+    game_mode = reinterpret_cast<decltype(game_mode)>(mock_mode);
+    original_found_city = reinterpret_cast<decltype(original_found_city)>(mock_found);
+    original_turret_limit = reinterpret_cast<decltype(original_turret_limit)>(mock_limit);
+    original_set_specialty = reinterpret_cast<decltype(original_set_specialty)>(mock_specialty);
 
     verify_foundation(site);
 
@@ -468,39 +520,39 @@ int main(int argc, char *argv[])
     uintptr_t end = start + 8 * kTurretSlotSize;
     memcpy(city + kTurretSlotsBegin, &start, sizeof start);
     memcpy(city + kTurretSlotsEnd, &end, sizeof end);
-    assert(extended_turret_limit(city) == 8);
+    assert(call_extended_turret_limit(city) == 8);
     end += kTurretSlotSize;
     memcpy(city + kTurretSlotsEnd, &end, sizeof end);
-    assert(extended_turret_limit(city) == 8);
+    assert(call_extended_turret_limit(city) == 8);
     end = start + 4 * kTurretSlotSize;
     memcpy(city + kTurretSlotsEnd, &end, sizeof end);
-    assert(extended_turret_limit(city) == 4);
+    assert(call_extended_turret_limit(city) == 4);
     end = start + 6 * kTurretSlotSize;
     memcpy(city + kTurretSlotsEnd, &end, sizeof end);
-    assert(extended_turret_limit(city) == 6);
+    assert(call_extended_turret_limit(city) == 6);
 
-    retain_rival_city_specialty(city, 1, 0);
+    call_retain_rival_city_specialty(city, 1, 0);
     assert(specialty_changes == 0);
     city[kCityIsPlayerOwned] = 1;
-    retain_rival_city_specialty(city, 1, 0);
+    call_retain_rival_city_specialty(city, 1, 0);
     assert(specialty_changes == 1 && last_specialty == 1);
     city[kCityIsPlayerOwned] = 0;
     current_mode = 0;
-    retain_rival_city_specialty(city, 2, 0);
+    call_retain_rival_city_specialty(city, 2, 0);
     assert(specialty_changes == 2 && last_specialty == 2);
 
-    original_building_count = mock_building_count;
-    allowed_turret_count = mock_allowed_turret_count;
-    simulation_context = mock_context;
-    scenario_settings = mock_settings;
-    game_difficulty = mock_difficulty;
-    assert(defensive_building_count(city) == 3);
+    original_building_count = reinterpret_cast<decltype(original_building_count)>(mock_building_count);
+    allowed_turret_count = reinterpret_cast<decltype(allowed_turret_count)>(mock_allowed_turret_count);
+    simulation_context = reinterpret_cast<decltype(simulation_context)>(mock_context);
+    scenario_settings = reinterpret_cast<decltype(scenario_settings)>(mock_settings);
+    game_difficulty = reinterpret_cast<decltype(game_difficulty)>(mock_difficulty);
+    assert(call_defensive_building_count(city) == 3);
     current_mode = kCivilizationMode;
-    assert(defensive_building_count(city) == 15);
-    assert(defensive_capacity_target(city) == 10);
+    assert(call_defensive_building_count(city) == 15);
+    assert(call_defensive_capacity_target(city) == 10);
     difficulty = 1;
-    assert(defensive_building_count(city) == 3);
-    assert(defensive_capacity_target(city) == 8);
+    assert(call_defensive_building_count(city) == 3);
+    assert(call_defensive_capacity_target(city) == 8);
     assert(install_rules(NULL) == 0);
     assert(argc == 2);
     verify_settings();

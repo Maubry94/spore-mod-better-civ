@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|Win32"><Configuration>Release</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|Win32"><Configuration>Debug</Configuration><Platform>Win32</Platform></ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{C09B2995-4A4C-4BEC-90C2-46C65802117D}</ProjectGuid>
+    <RootNamespace>BetterCiv</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <PreferredToolArchitecture>x64</PreferredToolArchitecture>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <UseDebugLibraries>false</UseDebugLibraries>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <Import Project="SdkPaths.props" Condition="Exists('SdkPaths.props')" />
+  <PropertyGroup>
+    <OutDir>$(MSBuildProjectDirectory)\dist\$(Configuration)\</OutDir>
+    <IntDir>$(MSBuildProjectDirectory)\build\$(Configuration)\</IntDir>
+    <TargetName>BetterCiv</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <TreatWarningAsError>true</TreatWarningAsError>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SporeSdkPath)\Spore ModAPI;$(SporeSdkPath)\EASTL-3.02.01\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EABase\include\Common;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAAssert\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAStdC\include;$(SporeSdkPath)\Detours\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <DataExecutionPrevention>true</DataExecutionPrevention>
+      <RandomizedBaseAddress>true</RandomizedBaseAddress>
+      <AdditionalLibraryDirectories>$(SporeLauncherPath)\coreLibs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>SporeModAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\better-civ.cpp" />
+    <ClCompile Include="src\dllmain.cpp" />
+    <ClInclude Include="src\BetterCiv.h" />
+    <ClInclude Include="src\NativeExtensions.h" />
+    <ClInclude Include="src\Settings.h" />
+  </ItemGroup>
+  <Target Name="ValidateSdkPaths" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(SporeSdkPath)\Spore ModAPI\Spore\ModAPI.h')" Text="Set SporeSdkPath to the Spore ModAPI SDK checkout (see SdkPaths.example.props)." />
+    <Error Condition="!Exists('$(SporeLauncherPath)\coreLibs\SporeModAPI.lib')" Text="Set SporeLauncherPath to the ModAPI Launcher Kit directory." />
+  </Target>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

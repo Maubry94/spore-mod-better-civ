@@ -1,0 +1,2 @@
+https://github.com/Spore-Community/Spore-ModAPI.git
+721b87f46f3673d8fd0cf4380655b1b7e54bd969
