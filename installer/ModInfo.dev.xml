@@ -31,7 +31,7 @@
   </componentGroup>
   <componentGroup displayName="AI Specialties" unique="AISpecialties">
     <component game="GalacticAdventures" displayName="Equal Odds" description="Each rival has an equal chance of being military, religious or economic." unique="EqualOdds" defaultChecked="true">CivInsanity-Option-TroisSpecialites.package</component>
-    <component game="GalacticAdventures" displayName="Balanced (3/3/3)" description="Start with exactly 3 military, 3 religious and 3 economic rivals in random order. Your specialty is separate. Requires a new Civilization game; saved cities keep their specialties." unique="Balanced333" defaultChecked="false">BetterCiv-Option-Balanced333.package</component>
+    <component game="GalacticAdventures" displayName="Balanced (3/3/3)" description="Start with exactly 3 military, 3 religious and 3 economic rivals in random order." unique="Balanced333" defaultChecked="false">BetterCiv-Option-Balanced333.package</component>
     <component game="GalacticAdventures" displayName="No Military" description="Rivals have a 50/50 chance of being religious or economic." unique="NoMilitary" defaultChecked="false">CivInsanity-Option-SansMilitaires.package</component>
     <component game="GalacticAdventures" displayName="No Religious" description="Rivals have a 50/50 chance of being military or economic." unique="NoReligious" defaultChecked="false">CivInsanity-Option-SansReligieuses.package</component>
     <component game="GalacticAdventures" displayName="No Economic" description="Rivals have a 50/50 chance of being military or religious." unique="NoEconomic" defaultChecked="false">CivInsanity-Option-SansEconomiques.package</component>
@@ -62,7 +62,7 @@
   </componentGroup>
   <componentGroup displayName="AI Diagnostics (Dev)" unique="AIDiagnostics">
     <component game="GalacticAdventures" displayName="Off" description="Do not write the optional AI diagnostic journal." unique="DiagnosticsOff" defaultChecked="true">BetterCiv-Option-DiagnosticsOff.package</component>
-    <component game="GalacticAdventures" displayName="On" description="Record AI decisions, conversions and combat. Visible battles also get detailed movement, building targets and turret logs. Read-only, with bounded output. Copy spore_log.txt before restarting Spore." unique="DiagnosticsOn" defaultChecked="false">BetterCiv-Option-DiagnosticsOn.package</component>
+    <component game="GalacticAdventures" displayName="On" description="Record AI decisions, conversions and combat. Visible battles also get detailed movement, building targets and turret logs. Read-only, with bounded output." unique="DiagnosticsOn" defaultChecked="false">BetterCiv-Option-DiagnosticsOn.package</component>
   </componentGroup>
   <componentGroup displayName="Stalled Offensives" unique="StalledOffensives">
     <component game="GalacticAdventures" displayName="Off" description="Do not cancel continuously reinforced attacks. Independent of Offensive Targets." unique="StalledOff" defaultChecked="true">BetterCiv-Option-StalledOff.package</component>
