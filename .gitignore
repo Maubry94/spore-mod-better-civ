@@ -3,3 +3,12 @@ __pycache__/
 *.dll
 *.exe
 *.mdmp
+build/
+.vs/
+SdkPaths.props
+*.user
+*.pdb
+*.obj
+*.ilk
+tests/loader-bin/
+tests/mLibs/
