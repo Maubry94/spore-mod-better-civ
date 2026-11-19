@@ -3,6 +3,10 @@
 Ten major cities and configurable rules for Spore's Civilization Stage: your city
 and nine major rivals, using the original planet placement system.
 
+See the [installer guide](docs/INSTALLERS.md), [testing status](docs/TESTING.md)
+and [development notes](docs/DEVELOPMENT.md). Changes by version are listed on
+[GitHub Releases](https://github.com/Maubry94/spore-mod-better-civ/releases).
+
 ## Build and test
 
 Use **Visual Studio 2022 / MSVC v143**, its C++ x86/x64 build tools, a Windows SDK,
