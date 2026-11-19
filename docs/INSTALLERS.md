@@ -50,6 +50,7 @@ defaults, distinct empty-property marker resources and archive contents. GitHub
 Actions runs the Python checks. Full x86 builds and native-reference checks need
 local MSVC, SDK and game files and are not run on GitHub-hosted runners.
 
-Historical diagnostic documents describe earlier candidates. Their option names,
-default states and validation statements may refer to those builds; this file
-and the release notes describe the public prerelease.
+See [TESTING.md](TESTING.md) for current evidence, remaining checks and live log
+reading, and [DEVELOPMENT.md](DEVELOPMENT.md) for implementation constraints.
+Release notes are published on
+[GitHub Releases](https://github.com/Maubry94/spore-mod-better-civ/releases).
