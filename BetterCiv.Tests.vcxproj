@@ -54,7 +54,7 @@
       <DataExecutionPrevention>true</DataExecutionPrevention>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <AdditionalLibraryDirectories>$(SporeLauncherPath)\coreLibs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>SporeModAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>$(MSBuildProjectDirectory)\build\Sdk\SporeModAPIBase.lib;SporeModAPI.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Target Name="ValidateSdkPaths" BeforeTargets="PrepareForBuild">
@@ -63,6 +63,6 @@
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ItemGroup>
-    <ClCompile Include="tests\test-better-civ.cpp" />
+    <ClCompile Include="$(MSBuildProjectDirectory)\tests\test-better-civ.cpp" />
   </ItemGroup>
 </Project>

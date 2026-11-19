@@ -31,6 +31,7 @@
   </componentGroup>
   <componentGroup displayName="AI Specialties" unique="AISpecialties">
     <component game="GalacticAdventures" displayName="Equal Odds" description="Each rival has an equal chance of being military, religious or economic." unique="EqualOdds" defaultChecked="true">CivInsanity-Option-TroisSpecialites.package</component>
+    <component game="GalacticAdventures" displayName="Balanced (3/3/3)" description="Start with exactly 3 military, 3 religious and 3 economic rivals in random order. Your specialty is separate. Requires a new Civilization game; saved cities keep their specialties." unique="Balanced333" defaultChecked="false">BetterCiv-Option-Balanced333.package</component>
     <component game="GalacticAdventures" displayName="No Military" description="Rivals have a 50/50 chance of being religious or economic." unique="NoMilitary" defaultChecked="false">CivInsanity-Option-SansMilitaires.package</component>
     <component game="GalacticAdventures" displayName="No Religious" description="Rivals have a 50/50 chance of being military or economic." unique="NoReligious" defaultChecked="false">CivInsanity-Option-SansReligieuses.package</component>
     <component game="GalacticAdventures" displayName="No Economic" description="Rivals have a 50/50 chance of being military or religious." unique="NoEconomic" defaultChecked="false">CivInsanity-Option-SansEconomiques.package</component>
@@ -47,13 +48,17 @@
     <component game="GalacticAdventures" displayName="Max by Type (Hard)" description="On Hard, rivals aim for 8, 6 or 4 turrets by city type. Player and rival fleet caps rise by about 38% before rounding. Other difficulties use vanilla rules." unique="MaxByTypeOnHard" defaultChecked="false">CivInsanity-Option-TourellesMaximum.package</component>
     <component game="GalacticAdventures" displayName="8 Slots per City" description="All large cities get 8 slots. On Hard, rivals aim to fill all 8. Fleet caps rise by about 85% on Hard, 33% on Normal and 50% on Easy. Use stock city walls." unique="EightSlotsPerCity" defaultChecked="false">CivInsanity-Option-TourellesTous.package</component>
   </componentGroup>
-  <componentGroup displayName="Rival Trade" unique="RivalTrade">
-    <component game="GalacticAdventures" displayName="First Rival Route" description="An economic AI can open its first rival trade route to a reachable city when both sides are at least neutral. Deliveries and buyouts follow vanilla rules." unique="FirstRivalRoute" defaultChecked="true">CivInsanity-Option-PremierPartenaire.package</component>
-    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original conditions for opening trade routes." unique="RivalTradeVanilla" defaultChecked="false">CivInsanity-Option-CommerceVanilla.package</component>
+  <componentGroup displayName="Trade" unique="TradeBehavior">
+    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original trade-partner conditions and retreat behavior when traders are hit." unique="TradeVanilla" defaultChecked="false">BetterCiv-Option-TradeVanilla.package</component>
+    <component game="GalacticAdventures" displayName="Better Trade" description="Help economic rivals open their first route to a reachable rival city when both nations are at least neutral. Land, sea and air traders keep their course under fire, but still take damage. Deliveries and city purchases follow the original rules." unique="BetterTrade" defaultChecked="true">BetterCiv-Option-BetterTrade.package</component>
   </componentGroup>
-  <componentGroup displayName="Trade Under Fire" unique="TradeUnderFire">
-    <component game="GalacticAdventures" displayName="Stay on Course" description="Land, sea and air traders stay on course after taking a hit while opening or serving a route. They can still take damage and be destroyed." unique="StayOnCourse" defaultChecked="true">CivInsanity-Option-MaintenirTrajet.package</component>
-    <component game="GalacticAdventures" displayName="Vanilla" description="Use the original retreat behavior when traders are hit." unique="RetreatVanilla" defaultChecked="false">CivInsanity-Option-RepliVanilla.package</component>
+  <componentGroup displayName="AI Behavior" unique="AIBehavior">
+    <component game="GalacticAdventures" displayName="Vanilla" description="Keep the original offensive targets, movement and vehicle-retirement decisions. Core city, conversion and diplomacy fixes remain active." unique="AIVanilla" defaultChecked="true">BetterCiv-Option-AIVanilla.package</component>
+    <component game="GalacticAdventures" displayName="Better AI" description="Reconsider failed offensives; abandon engaged sieges after 3 minutes without a new conquest or conversion high, then avoid that city for 2 minutes. Help blocked vehicles find nearby space. Gradually sell idle surplus AI land units to make room for ships, and idle AI ships after all ports are lost. Protect active missions and player fleets from sales. Experimental: some traffic jams remain." unique="BetterAI" defaultChecked="false">BetterCiv-Option-BetterAI.package</component>
+  </componentGroup>
+  <componentGroup displayName="AI Diagnostics (Dev)" unique="AIDiagnostics">
+    <component game="GalacticAdventures" displayName="Off" description="Do not write the optional AI diagnostic journal." unique="DiagnosticsOff" defaultChecked="true">BetterCiv-Option-DiagnosticsOff.package</component>
+    <component game="GalacticAdventures" displayName="On" description="Record AI decisions, conversions and combat. Visible battles also get detailed movement, building targets and turret logs. Read-only, with bounded output. Copy spore_log.txt before restarting Spore." unique="DiagnosticsOn" defaultChecked="false">BetterCiv-Option-DiagnosticsOn.package</component>
   </componentGroup>
   <prerequisite game="GalacticAdventures">CivInsanity-Specialites.package</prerequisite>
   <prerequisite>BetterCiv.dll</prerequisite>

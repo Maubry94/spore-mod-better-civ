@@ -21,6 +21,11 @@ if (-not $MSBuildPath) {
 if (-not $MSBuildPath) { throw 'Install Visual Studio C++ Build Tools, or pass -MSBuildPath.' }
 $sdkPath = (Resolve-Path -LiteralPath $SporeSdkPath).Path
 $launcherPath = (Resolve-Path -LiteralPath $SporeLauncherPath).Path
+$sdkOutput = Join-Path $repoPath 'build/Sdk/'
+$sdkIntermediate = Join-Path $repoPath 'build/Sdk/obj/'
+$sdkOverrides = Join-Path $PSScriptRoot 'SdkBuildOverrides.props'
+& $MSBuildPath (Join-Path $sdkPath 'Spore ModAPI/Spore ModAPI.vcxproj') /m /nologo /v:minimal /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 "/p:OutDir=$sdkOutput" "/p:IntDir=$sdkIntermediate" "/p:ForceImportBeforeCppTargets=$sdkOverrides"
+if ($LASTEXITCODE -ne 0) { throw "SDK static library build failed ($LASTEXITCODE)." }
 $arguments = @('/m', '/nologo', '/v:minimal', "/p:Configuration=$Configuration", '/p:Platform=Win32', "/p:SporeSdkPath=$sdkPath", "/p:SporeLauncherPath=$launcherPath")
 & $MSBuildPath (Join-Path $repoPath 'BetterCiv.vcxproj') @arguments
 if ($LASTEXITCODE -ne 0) { throw "DLL build failed ($LASTEXITCODE)." }

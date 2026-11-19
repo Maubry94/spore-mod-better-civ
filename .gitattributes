@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.sporemod binary
+*.package binary
+*.png binary

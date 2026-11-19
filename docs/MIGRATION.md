@@ -165,7 +165,8 @@ Use a backed-up Test B save if available, **Hard** difficulty and a **Military**
 | Rival Trade | First Rival Route |
 | Trade Under Fire | Stay on Course |
 
-- [ ] Hovering the world-view land purchase button displays 500; buying still deducts 500.
+- [x] The city planner and world-view land purchase tooltip both display 500 (user-confirmed in the fresh-campaign test below).
+- [ ] Buying through the world-view shortcut still deducts 500 in this build.
 - [ ] When unlocked, sea and air purchase buttons display and charge 750 and 1,500 respectively with stock vehicle costs.
 - [ ] Land purchases in the city planner still use the 500 threshold, with fleet space available.
 - [ ] Resume from before the crash and observe conquests. If five different AI nations have each captured at least one city, the game continues rather than overflowing the portrait panel.
@@ -173,3 +174,31 @@ Use a backed-up Test B save if available, **Hard** difficulty and a **Military**
 - [ ] Save and reload after that event, then check city selection, diplomacy and continued simulation.
 
 If fewer than five different rivals have made their first conquest, absence of a crash does not validate the overflow scenario. Trader-under-fire behavior and the remaining long-game checks are still pending.
+
+### Fresh-campaign save/reload result, 2026-11-16
+
+The user tested `Better Civ SDK crash and hover fix.sporemod` (source commit `25305bc`) with a new Civilization campaign, Hard difficulty, a Military player and all eleven Test B2 settings listed above. The user confirmed:
+
+- [x] The new campaign starts.
+- [x] Land vehicle prices display 500 in both the city planner and the world-view tooltip.
+- [x] Manual saving succeeds after constructing buildings and purchasing vehicles.
+- [x] After fully exiting Spore and restarting through ModAPI, the new campaign loads.
+- [x] Saved buildings and progress are present after reloading.
+
+This validates the reported fresh-campaign save/reload cycle and land price display with these settings. It does not establish long-game stability, sea/air price correctness or the five-rival portrait overflow case. An older campaign's loading stall remains unresolved; the successful new-campaign test does not identify its cause or establish that price changes damaged it. Further recovery work on that older campaign was set aside at the user's request.
+
+### User-reported diplomacy panel vacancy
+
+The user subsequently observed four represented rivals in the diplomacy panel. A fifth, unrepresented rival conquered and eliminated one of those four nations. The game continued without crashing, but the conqueror did not take the newly freed portrait slot.
+
+This confirms that the reported elimination scenario completed without a crash. It does not independently validate allocation of a fifth portrait while all four existing slots remain occupied. Automatic reuse of a freed slot, prioritizing the conqueror, and a separate investigation of a larger or scrollable panel have been added to the [planned improvements](AI-OFFENSIVES.md#planned-improvements). No implementation or test-archive change accompanies this report.
+
+### Diplomacy slot reuse follow-up, 2026-11-17
+
+The subsequent [diplomacy panel test](DIPLOMACY-PANEL.md) implements automatic vacancy reuse and eligible-conqueror priority with a waiting-rival fallback. Native removal leaves the occupied byte set after hiding/releasing a portrait. A guarded UI update adapter frees those empty slots and registers eligible waiting rivals through the native helpers. The four-portrait limit remains. Duplicate prevention and save restoration are covered by offline Release and Debug tests; the actual UI and save/reload behavior of this revision still require an in-game test. The installer manifest and game-data packages remain unchanged from the stalled-offensives build.
+
+### Pagination prototype, 2026-11-17
+
+Following the user's successful slot-replacement, communication and save/reload checks, the separate [pagination prototype](DIPLOMACY-PAGINATION.md) uses four native slots as a view over up to nine eligible rivals. SDK buttons navigate pages, pending calls can surface another page, and page changes are blocked while a conversation is open. Saved visible slots are prioritized over hidden -1 entries on restoration. Offline Release/Debug tests pass; on-screen placement, actual communications and saving/reloading this new revision remain pending in-game checks. No game-data package or installer setting changes accompany pagination.
+
+The first pagination playtest crashed at new-game startup on 2026-11-17 at 15:56:41. Fix 1 removes `IButton::SetCaptionBorders`, whose pinned SDK declaration disagrees with the native argument layout on the supported executable. Production widget-setup fixtures now cover the path skipped by the original tests. See the pagination document for dump evidence and the focused retry checklist; the correction is not yet confirmed in game.

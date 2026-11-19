@@ -1,8 +1,12 @@
 #include "better-civ.cpp"
 using namespace BetterCiv;
 #include <assert.h>
+#include <crtdbg.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string>
+#include <utility>
+#include <memory>
 
 enum {
     kSiteMinorNation=0x25, kSiteSpecialty=0x28, kCityIsPlayerOwned=0x33c,
@@ -49,6 +53,7 @@ static int __fastcall mock_difficulty(void *scenario, int) { return *(int *)scen
 
 static uint32_t __cdecl mock_mode(void) { return current_mode; }
 static void *__cdecl mock_found(unsigned char *site) {
+    if (!site) return nullptr;
     observed_status = site[kSiteMinorNation];
     memcpy(&observed_site_specialty, site + kSiteSpecialty, sizeof observed_site_specialty);
     return site;
@@ -91,11 +96,12 @@ static const uintptr_t optional_targets[] = {
 static const uint32_t palette_sites[] = {0xd08195, 0xd08333, 0xd088d6, 0xe4950c, 0x5f1d08, 0x5ed8b1, 0x59e840};
 
 static const Settings defaults = {
-    100, 100, 8, 15, 15, 4000, 4000, kAllSpecialties, 0, TURRETS_VANILLA, 1, 1,
+    100, 100, 8, 15, 15, 4000, 4000, kAllSpecialties, 0, TURRETS_VANILLA, 1, 1, 0, 0, 0,
 };
 static const Settings mixed = {
-    75, 25, 12, 30, 30, 4000, 15000, kMilitaryMask | kEconomicMask, 1, TURRETS_ALL_SPECIALTIES, 0, 0,
+    75, 25, 12, 30, 30, 4000, 15000, kMilitaryMask | kEconomicMask, 1, TURRETS_ALL_SPECIALTIES, 0, 0, 0, 0, 0,
 };
+#include "installer-preset-tests.h"
 
 static const float *__fastcall mock_read_float(void *property, int)
 {
@@ -405,8 +411,13 @@ static void verify_portrait_bounds(void)
     restore(&panel, 4, nullptr);
 }
 
-static void verify_foundation(unsigned char *site)
+using FoundationDecoder = int (__cdecl*)(int);
+#include "balanced-specialty-tests.h"
+
+static void verify_foundation(FoundationDecoder decode)
 {
+    unsigned char site[0x64] = {};
+    number_of_draws = 0;
     const char *options[] = {
         "EqualOdds", "NoMilitary", "NoReligious", "NoEconomic",
         "MilitaryOnly", "ReligiousOnly", "EconomicOnly",
@@ -432,11 +443,59 @@ static void verify_foundation(unsigned char *site)
             assert(observed_site_specialty == native);
             current_mode = kCivilizationMode;
             assert(found_major_city(reinterpret_cast<Native::CityFoundation*>(site)) == reinterpret_cast<City*>(site) && observed_status == 0);
-            assert(observed_site_specialty == specialties[i][mock_draw]);
+            // Interpret the descriptor with the actual reference executable's
+            // converter, not a mock repeating the mod's numeric assumptions.
+            assert(decode(observed_site_specialty) == specialties[i][mock_draw]);
         }
     }
     assert(number_of_draws == 6);
     settings = defaults;
+    // Equal Odds preserves every native descriptor and consumes no extra RNG.
+    for (int native : {0, 1, 2, -1}) {
+        memcpy(site + kSiteSpecialty, &native, sizeof native);
+        found_major_city(reinterpret_cast<Native::CityFoundation*>(site));
+        assert(observed_site_specialty == native);
+    }
+    assert(found_major_city(nullptr) == nullptr && number_of_draws == 6);
+}
+
+static void verify_native_foundation_contract(const unsigned char* image)
+{
+    // This 38-byte pure function has only stack reads, relative branches and
+    // constants: no game state, imports, relocations or external calls. Copy
+    // it from the user's reference file; never bundle the executable itself.
+    constexpr size_t length = 38;
+    const auto* source = image + 0xbefa70 - kReferenceBase;
+    uint32_t hash = 2166136261u;
+    for (size_t i = 0; i < length; ++i) hash = (hash ^ source[i]) * 16777619u;
+    assert(hash == 0xec66066a);
+    auto* code = static_cast<unsigned char*>(VirtualAlloc(nullptr, length,
+        MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    assert(code);
+    memcpy(code, source, length);
+    DWORD previous;
+    assert(VirtualProtect(code, length, PAGE_EXECUTE_READ, &previous));
+    assert(FlushInstructionCache(GetCurrentProcess(), code, length));
+    auto decode = reinterpret_cast<FoundationDecoder>(code);
+    assert(decode(0) == kVehicleMilitary);
+    assert(decode(1) == kVehicleEconomic);
+    assert(decode(2) == kVehicleCultural);
+    assert(decode(-1) == -1 && decode(3) == -1);
+    const auto saved_mode = game_mode;
+    const auto saved_found = original_found_city;
+    const auto saved_random = random_below;
+    const auto saved_state = simulation_random;
+    const auto saved_settings = settings;
+    const auto saved_current_mode = current_mode;
+    game_mode = reinterpret_cast<decltype(game_mode)>(mock_mode);
+    original_found_city = reinterpret_cast<decltype(original_found_city)>(mock_found);
+    verify_foundation(decode);
+    verify_balanced_foundation(decode);
+    game_mode = saved_mode; original_found_city = saved_found;
+    random_below = saved_random; simulation_random = saved_state;
+    settings = saved_settings; current_mode = saved_current_mode;
+    assert(VirtualFree(code, 0, MEM_RELEASE));
+    puts("All seven specialty choices passed the native foundation-to-vehicle-purpose converter.");
 }
 
 static unsigned char trade_player[0xa4];
@@ -574,7 +633,10 @@ static void verify_rival_trade(void)
     assert(call_trade_acceptance(NULL, target, origin) == 0.6f);
 }
 
-static void verify_reference_writes(const char *path, int variant)
+#include "conversion-capacity-tests.h"
+#include "reference-code-tests.h"
+
+static void verify_reference_writes(const char *path, int variant, int ai_options = 0)
 {
     FILE *file = fopen(path, "rb");
     assert(file);
@@ -599,6 +661,14 @@ static void verify_reference_writes(const char *path, int variant)
                section[i].SizeOfRawData);
     }
     IMAGE_NT_HEADERS32 *image_header = (IMAGE_NT_HEADERS32 *)(image + dos->e_lfanew);
+    prepare_relocated_reference_image(image, variant == 0 && ai_options == 0);
+    if (variant == 0 && ai_options == 0) {
+        verify_native_foundation_contract(image);
+        verify_native_capacity_constants(image);
+        // Exact scripts used by native call startup and acknowledgement.
+        assert(memcmp(image + 0x147f218 - kReferenceBase, kPortraitCallMaterial, sizeof kPortraitCallMaterial) == 0);
+        assert(memcmp(image + 0x13f9ca0 - kReferenceBase, kPortraitIdleMaterial, sizeof kPortraitIdleMaterial) == 0);
+    }
     unsigned char *founding = image + 0xb9bda0 - kReferenceBase;
     unsigned char *limit = image + 0xbd8c67 - kReferenceBase;
     unsigned char *editor = image + 0xd07e1a - kReferenceBase;
@@ -613,7 +683,61 @@ static void verify_reference_writes(const char *path, int variant)
     image_header->FileHeader.Machine = IMAGE_FILE_MACHINE_I386;
 
     const int use_options = variant == 1;
+    // Reject changed native helper bodies before writing even the founding hook.
+    for (const auto helper : {std::pair<uint32_t, unsigned>{0xe01280, 27}, {0xe04930, 235},
+         {0xe052b0, 236}, {0xe064d0, 112}, {0xe06610, 108}, {0x808b80, 66},
+         {0x744700, 29}, {0x751619, 7}, {0x753172, 7}, {0x7531bf, 259},
+         {0xb99c16, 22}, {0xbefa70, 38}, {0xb99b74, 23}, {0xbf82f6, 19},
+         {0xbeb710, 270}, {0xbeb310, 1024}, {0xbd9ff0, 44},
+         {0xd57b00, 719}, {0xafdf60, 955}, {0x13eb950, 4},
+         {0x1486054, 4}, {0x13eed94, 4}, {0x145be38, 4}, {0x1567354, 4}}) {
+        auto* body = image + helper.first - kReferenceBase;
+        for (unsigned i = 0; i < helper.second; ++i) {
+            body[i] ^= 1; assert(!install_rules(image) && founding[1] == 0x4b); body[i] ^= 1;
+        }
+    }
+    auto* portrait_update_site = image + 0xcfe3fc - kReferenceBase;
+    portrait_update_site[4] ^= 1;
+    assert(!install_rules(image) && founding[1] == 0x4b);
+    portrait_update_site[4] ^= 1;
     settings = use_options ? mixed : defaults;
+    auto* conversion_site = image + 0xae57e3 - kReferenceBase;
+    conversion_site[4] ^= 1;
+    assert(!install_rules(image) && founding[1] == 0x4b);
+    conversion_site[4] ^= 1;
+    auto* preload_site = image + 0xcfcf0c - kReferenceBase;
+    preload_site[4] ^= 1;
+    assert(!install_rules(image) && founding[1] == 0x4b);
+    preload_site[4] ^= 1;
+    settings.rethink_offensives = ai_options & 1;
+    settings.ai_diagnostics = (ai_options >> 1) & 1;
+    settings.stalled_seconds = (ai_options & 4) ? 180 : 0;
+    settings.retry_blocked_paths=variant==1?2:0;
+    auto* request_site=image+0xc9ea20-kReferenceBase;
+    unsigned char request_original[5];memcpy(request_original,request_site,5);
+    const uint32_t ai_sites[] = {0xbfbfe5, 0xbfbfee, 0xbfaa32};
+    const uintptr_t ai_targets[] = {reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
+        reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
+        reinterpret_cast<uintptr_t>(filtered_expansion_owner::detoured_function)};
+    const bool ai_enabled[] = {ai_options != 0, ai_options != 0, settings.rethink_offensives || settings.stalled_seconds};
+    if (settings.stalled_seconds) {
+        auto* setter = image + 0xcac1a0 - kReferenceBase;
+        for (unsigned i = 0; i < 212; ++i) {
+            setter[i] ^= 1;
+            assert(!install_rules(image) && founding[1] == 0x4b);
+            setter[i] ^= 1;
+        }
+    }
+    unsigned char original_ai_bytes[3][5];
+    for (unsigned i = 0; i < 3; ++i) {
+        auto* site = image + ai_sites[i] - kReferenceBase;
+        memcpy(original_ai_bytes[i], site, 5);
+        if (ai_enabled[i]) {
+            site[4] ^= 1;
+            assert(!install_rules(image) && founding[1] == 0x4b);
+            site[4] ^= 1;
+        }
+    }
     if (variant == 2)
         apply_option(&settings, "<TurretsAndFleets>MaxByTypeOnHard");
     unsigned char original_option_bytes[sizeof optional_sites / sizeof optional_sites[0]][5];
@@ -649,13 +773,16 @@ static void verify_reference_writes(const char *path, int variant)
     image_header->OptionalHeader.SizeOfImage = kSteamOctober2024ImageSize;
     unsigned char *sites[] = {founding, limit, editor, capture,
       image + 0xbe8c2c - kReferenceBase, image + 0xbe5c45 - kReferenceBase, image + 0xbe5cc4 - kReferenceBase,
-      image + 0xbf468d - kReferenceBase, image + 0xe065de - kReferenceBase};
+      image + 0xbf468d - kReferenceBase, image + 0xe065de - kReferenceBase, image + 0xcfe3fc - kReferenceBase,
+      image + 0xcfcf0c - kReferenceBase, image + 0xae57e3 - kReferenceBase};
     uintptr_t targets[] = {(uintptr_t)found_major_city, (uintptr_t)extended_turret_limit::detoured_function,
                            (uintptr_t)extended_turret_limit::detoured_function, (uintptr_t)retain_rival_city_specialty::detoured_function,
                            (uintptr_t)retain_rival_city_specialty::detoured_function, (uintptr_t)defensive_capacity_target::detoured_function, (uintptr_t)defensive_building_count::detoured_function,
-                           (uintptr_t)safe_register_portrait::detoured_function, (uintptr_t)safe_restore_portrait::detoured_function};
+                           (uintptr_t)safe_register_portrait::detoured_function, (uintptr_t)safe_restore_portrait::detoured_function,
+                           (uintptr_t)reuse_portrait_slots::detoured_function, (uintptr_t)rechecked_civ_model_world,
+                           (uintptr_t)initialized_city_conversion::detoured_function};
     int enabled[] = {1, variant == 1, variant == 1, variant == 1,
-                     variant == 1, variant != 0, variant != 0, 1, 1};
+                     variant == 1, variant != 0, variant != 0, 1, 1, 1, 1, 1};
     uint32_t fleet_sites[] = {0xbd7325, 0xbf228a, 0xbf686f, 0xbf6afa, 0xd07c73,
                              0xd1df57, 0xd1df73, 0xd1df93};
     unsigned char original_base_bytes[sizeof sites / sizeof sites[0]][5];
@@ -677,6 +804,20 @@ static void verify_reference_writes(const char *path, int variant)
     for (uint32_t address : palette_sites)
         assert(VirtualProtect(image + address - kReferenceBase, 5, PAGE_EXECUTE_READ, &old));
     assert(install_rules(image));
+    if(settings.retry_blocked_paths==2) {
+        uint32_t displacement;memcpy(&displacement,request_site+1,4);
+        assert(request_site[0]==0xe9 && reinterpret_cast<uintptr_t>(request_site)+5+displacement==reinterpret_cast<uintptr_t>(retained_local_request));
+        assert(recovery_native_ready && reinterpret_cast<uintptr_t>(original_local_request)==reinterpret_cast<uintptr_t>(image)+0xc43fa0-kReferenceBase);
+    } else assert(!memcmp(request_site,request_original,5));
+    for (unsigned i = 0; i < 3; ++i) {
+        auto* site = image + ai_sites[i] - kReferenceBase;
+        if (!ai_enabled[i]) assert(memcmp(site, original_ai_bytes[i], 5) == 0);
+        else {
+            uint32_t displacement;
+            memcpy(&displacement, site + 1, 4);
+            assert(site[0] == 0xe8 && reinterpret_cast<uintptr_t>(site) + 5 + displacement == ai_targets[i]);
+        }
+    }
     if (settings.maintain_trade_under_fire) {
         uint32_t relative;
         memcpy(&relative, retreat + 1, sizeof relative);
@@ -747,9 +888,34 @@ static void verify_reference_writes(const char *path, int variant)
     HeapFree(GetProcessHeap(), 0, disk);
 }
 
+#include "offensive-tests.h"
+#include "portrait-tests.h"
+#include "pagination-tests.h"
+#include "pager-widget-tests.h"
+#include "portrait-call-tests.h"
+#include "portrait-order-tests.h"
+#include "preload-tests.h"
+#include "conversion-tests.h"
+#include "combat-tests.h"
+#include "movement-tests.h"
+#include "recovery-tests.h"
+#include "placement-tests.h"
+#include "traffic-tests.h"
+#include "fleet-tests.h"
+#include "trade-route-tests.h"
+#include "movement-fleet-fix-tests.h"
+
 int main(int argc, char *argv[])
 {
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+
     setvbuf(stdout, nullptr, _IONBF, 0);
+    if (argc == 3 && strcmp(argv[1], "--reference-live") == 0) {
+        verify_captured_reference_guards(argv[2]);
+        return 0;
+    }
     if (argc == 4 && strcmp(argv[1], "--loader") == 0) {
         // Load the shim explicitly from an isolated test directory. The actual
         // mod's DllMain must register with it through its real DLL imports.
@@ -769,14 +935,13 @@ int main(int argc, char *argv[])
     // Keep the fixture loaded until process exit: SDK addresses also back the
     // thread-local scalar destructor. Nothing is copied into the game folders.
     assert(LoadLibraryExA(argv[2], nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
-    unsigned char site[0x64] = {0};
     unsigned char city[0x818] = {0};
     game_mode = reinterpret_cast<decltype(game_mode)>(mock_mode);
     original_found_city = reinterpret_cast<decltype(original_found_city)>(mock_found);
     original_turret_limit = reinterpret_cast<decltype(original_turret_limit)>(mock_limit);
     original_set_specialty = reinterpret_cast<decltype(original_set_specialty)>(mock_specialty);
 
-    verify_foundation(site);
+    current_mode = kCivilizationMode;
 
     uintptr_t start = 0x1000;
     uintptr_t end = start + 8 * kTurretSlotSize;
@@ -817,6 +982,7 @@ int main(int argc, char *argv[])
     assert(call_defensive_capacity_target(city) == 8);
     assert(install_rules(NULL) == 0);
     verify_settings();
+    verify_installer_presets();
     puts("Settings checks passed; checking palette prices...");
     verify_palette_prices();
     puts("Palette price and affordability checks passed.");
@@ -825,9 +991,40 @@ int main(int argc, char *argv[])
     puts("Localized hover prices and nine-rival portrait bounds passed.");
     verify_fleet_capacity();
     verify_rival_trade();
+    verify_offensive_policy();
+    verify_offensive_adapters();
+    puts("Offensive wave, SDK adapter, lifecycle and optional log checks passed.");
+    verify_portrait_reuse();
+    verify_portrait_pagination();
+    verify_pager_widget_setup();
+    verify_portrait_call_alerts();
+    verify_portrait_arrival_order();
+    verify_portrait_specialty_refresh();
+    verify_preload_recheck();
+    verify_conversion_diagnostics();
+    verify_combat_diagnostics();
+    verify_movement_diagnostics();
+    verify_movement_recovery();
+    verify_placement_policy();
+    verify_placement_adapter();
+    verify_placement_loops();
+    verify_placement_terrain();
+    verify_traffic_geometry();
+    verify_traffic_adapter();
+    verify_fleet_policy();
+    verify_fleet_adapter();
+    verify_land_fleet_adapter();
+    verify_retained_request();
+    verify_religious_surplus();
+    verify_trade_geometry();
+    verify_trade_adapter();
+    verify_conversion_capacity();
+    puts("Diplomacy slot reuse, priority, map/reference ownership and lifecycle checks passed.");
     verify_reference_writes(argv[1], 0);
     verify_reference_writes(argv[1], 1);
     verify_reference_writes(argv[1], 2);
+    for (int ai_options = 1; ai_options <= 7; ++ai_options)
+        verify_reference_writes(argv[1], 0, ai_options);
     puts("Logic and reference executable checks passed.");
     return 0;
 }
