@@ -31,7 +31,7 @@
   </componentGroup>
   <componentGroup displayName="AI Specialties" unique="AISpecialties">
     <component game="GalacticAdventures" displayName="Equal Odds" description="Each rival has an equal chance of being military, religious or economic." unique="EqualOdds" defaultChecked="true">CivInsanity-Option-TroisSpecialites.package</component>
-    <component game="GalacticAdventures" displayName="Balanced (3/3/3)" description="Start with exactly 3 military, 3 religious and 3 economic rivals in random order." unique="Balanced333" defaultChecked="false">BetterCiv-Option-Balanced333.package</component>
+    <component game="GalacticAdventures" displayName="Balanced (3/3/3)" description="Start with exactly three military, three religious and three economic rivals." unique="Balanced333" defaultChecked="false">BetterCiv-Option-Balanced333.package</component>
     <component game="GalacticAdventures" displayName="No Military" description="Rivals have a 50/50 chance of being religious or economic." unique="NoMilitary" defaultChecked="false">CivInsanity-Option-SansMilitaires.package</component>
     <component game="GalacticAdventures" displayName="No Religious" description="Rivals have a 50/50 chance of being military or economic." unique="NoReligious" defaultChecked="false">CivInsanity-Option-SansReligieuses.package</component>
     <component game="GalacticAdventures" displayName="No Economic" description="Rivals have a 50/50 chance of being military or religious." unique="NoEconomic" defaultChecked="false">CivInsanity-Option-SansEconomiques.package</component>
@@ -46,7 +46,7 @@
   <componentGroup displayName="Turrets &amp; Fleets" unique="TurretsAndFleets">
     <component game="GalacticAdventures" displayName="Vanilla" description="Use original turret and fleet limits. Large cities have 8 military, 6 religious or 4 economic turret slots." unique="TurretsVanilla" defaultChecked="true">CivInsanity-Option-TourellesVanilla.package</component>
     <component game="GalacticAdventures" displayName="Max by Type (Hard)" description="On Hard, rivals aim for 8, 6 or 4 turrets by city type. Player and rival fleet caps rise by about 38% before rounding. Other difficulties use vanilla rules." unique="MaxByTypeOnHard" defaultChecked="false">CivInsanity-Option-TourellesMaximum.package</component>
-    <component game="GalacticAdventures" displayName="8 Slots per City" description="All large cities get 8 slots. On Hard, rivals aim to fill all 8. Fleet caps rise by about 85% on Hard, 33% on Normal and 50% on Easy. Use stock city walls." unique="EightSlotsPerCity" defaultChecked="false">CivInsanity-Option-TourellesTous.package</component>
+    <component game="GalacticAdventures" displayName="8 Slots per City" description="All large cities get 8 slots. On Hard, rivals aim to fill all 8. Fleet caps rise by about 85% on Hard, 33% on Normal and 50% on Easy." unique="EightSlotsPerCity" defaultChecked="false">CivInsanity-Option-TourellesTous.package</component>
   </componentGroup>
   <componentGroup displayName="Rival Trade" unique="RivalTrade">
     <component game="GalacticAdventures" displayName="First Rival Route" description="An economic AI can open its first rival trade route to a reachable city when both sides are at least neutral. Deliveries and buyouts follow vanilla rules." unique="FirstRivalRoute" defaultChecked="true">CivInsanity-Option-PremierPartenaire.package</component>
