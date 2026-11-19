@@ -22,5 +22,3 @@ Known limitations:
 - Large coastal cities can still overlap the water along their walls. No terrain correction is included.
 - The latest fleet-retirement eligibility changes need live confirmation. In particular, ships retaining explicit orders are deliberately not sold, even after port loss.
 - Alternative-target selection and the stalled-siege cooldown need further isolated tests. Timers and failed-wave history reset on load.
-- The historical garbled peace notification for an eliminated nation remains an open report.
-- The repaired trade ribbon needs further live checks after city ownership changes.
