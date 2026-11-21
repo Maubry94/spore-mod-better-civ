@@ -33,6 +33,9 @@ static void verify_retained_request()
     r=reset();q.relative=true;call(u,&q);assert(request_passes==1);q.relative=false;
     r=reset();u->mTimeSinceLastWeaponFireMS=0;call(u,&q);assert(request_passes==1);u->mTimeSinceLastWeaponFireMS=30000;
     r=reset();put_pointer(u,offsetof(Vehicle,mpTarget),u);call(u,&q);assert(request_passes==1);put_pointer(u,offsetof(Vehicle,mpTarget),nullptr);
+    r=reset();r->separating=true;u->mTimeSinceLastWeaponFireMS=0;
+    call(u,&q);assert(!request_passes && r->active); // Separation also applies while firing.
+    q.position.x=99;call(u,&q);assert(request_passes==1 && !r->active);q.position.x=30;u->mTimeSinceLastWeaponFireMS=30000;
     r=reset();r->hold_native=false;call(u,&q);assert(request_passes==1); // Player / idle yielding never held.
     r=reset();ai_time+=2000;call(u,&q);assert(request_passes==1); // Lost observer continuity.
     r=reset();u->mPosition=r->imposed.goal;call(u,&q);assert(request_passes==1);u->mPosition={0,0,500};

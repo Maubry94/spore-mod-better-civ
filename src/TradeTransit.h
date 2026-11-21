@@ -38,6 +38,7 @@ struct State {
 inline bool ValidateNative(const unsigned char* base,uint32_t delta) {
     if(!base)return false;
     const struct {uint32_t address,size,hash;} guards[]={
+        {0xdca090,1697,0x8225c49b}, // Entire proposal update, including native invalid-target cancellation.
         {0xdcc7c0,1444,0x70325dee}, // Complete trade update, including its return convention.
         {0xdccd64,24,0x9d27a6c9},  // Six phase dispatch addresses.
         {0xca73e0,69,0x4c7f38ae},  // Native diagnostic string at Vehicle+D14.

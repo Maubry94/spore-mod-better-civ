@@ -13,13 +13,15 @@ static void verify_trade_agreement_guard() {
     put_pointer(own,kCivCitiesBegin,own_cities);put_pointer(own,kCivCitiesEnd,own_cities+1);
     put_pointer(other,kCivCitiesBegin,other_cities);put_pointer(other,kCivCitiesEnd,other_cities+1);
     put_pointer(own,kCivVehiclesBegin,units);put_pointer(own,kCivVehiclesEnd,units+1);
-    TradePartner agreement={7,home,0};
+    TradePartner agreement={home,reinterpret_cast<void*>(0x1234),0};
     put_pointer(partner,kCityTradePartnersBegin,&agreement);put_pointer(partner,kCityTradePartnersEnd,&agreement+1);
     portrait_fixture_civs.push_back(own);portrait_fixture_civs.push_back(other);portrait_civilizations=mock_portrait_civilizations;
     VehicleOrder order={};order.kind=5;order.target=partner;order.political_id=7;
     assert(trade_delivery_valid(*u,order));
     order.target=reinterpret_cast<void*>(0x1234);assert(!trade_delivery_valid(*u,order));order.target=partner;
-    agreement.political_id=9;assert(!trade_delivery_valid(*u,order));agreement.political_id=7;
+    agreement.city=reinterpret_cast<void*>(0x1234);assert(!trade_delivery_valid(*u,order));agreement.city=home;
+    home->mbIsDestroyed=true;assert(!trade_delivery_valid(*u,order));home->mbIsDestroyed=false;
+    cb[0][0x24]=9;assert(!trade_delivery_valid(*u,order));cb[0][0x24]=7;
     order.political_id=9;assert(!trade_delivery_valid(*u,order));order.political_id=7;
     home->field_32C={};assert(!trade_delivery_valid(*u,order));home->field_32C={0,0,500};
     partner->field_32C={};assert(!trade_delivery_valid(*u,order));partner->field_32C={0,0,500};

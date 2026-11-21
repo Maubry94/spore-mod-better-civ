@@ -555,12 +555,25 @@ static uint32_t political_id(Civilization* entity)
     return entity->GetPoliticalID();
 }
 
+static uint32_t live_trade_partner_id(const Simulator::cCityPartner& partner)
+{
+    const auto* wanted=Native::TradePartnerCity(partner);
+    if(!wanted)return UINT32_MAX;
+    for(const auto& civ:portrait_civilizations()) {
+        if(!civ || civ->mbIsDestroyed)continue;
+        for(const auto& city:civ->mCities)
+            if(city.get()==wanted && !city->mbIsDestroyed && city->mpCivilization.get()==civ.get())
+                return political_id(civ.get());
+    }
+    return UINT32_MAX;
+}
+static auto trade_partner_id=live_trade_partner_id;
 static int has_rival_trade(Civilization* civilization, uint32_t own_id, uint32_t player_id)
 {
     for (const auto& city : civilization->mCities) {
         if (!city) continue;
         for (const auto& partner : city->mTradePartners) {
-            const auto id = Native::TradePartnerPoliticalId(partner);
+            const auto id = trade_partner_id(partner);
             if (id != own_id && id != player_id && id != UINT32_MAX)
                 return 1;
         }
@@ -1058,6 +1071,9 @@ static int install_rules(unsigned char *base)
     const bool request_guard=Recovery::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     const bool transit_guard=TradeTransit::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     BranchSite sites[] = {
+        {0xdca6b9,{0xe8,0xc2,0x88,0xe7,0xff},(uintptr_t)trade_proposal_arrival,NULL,0,transit_guard && settings.retry_blocked_paths==2},
+        {0xdca0b0,{0xe8,0xab,0xd2,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},
+        {0xdcc7f1,{0xe8,0x6a,0xab,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},
         {0xdcc7c0, {0x83,0xec,0x0c,0x53,0x55}, (uintptr_t)guarded_trade_update, NULL, 0,
             transit_guard && (settings.retry_blocked_paths==2 || settings.ai_diagnostics)},
         {0xc9ea20, {0xe9,0x7b,0x55,0xfa,0xff}, (uintptr_t)retained_local_request, NULL, 0, settings.retry_blocked_paths==2 && request_guard},
@@ -1122,6 +1138,7 @@ static int install_rules(unsigned char *base)
     // Validate foundation specialty conversion, native preload layout/cleanup and portrait ownership helpers
     // before enabling any caller or writing patches.
     const struct { uint32_t address, size, hash; } native_helpers[] = {
+        {0xbdb350,128,0xf30f9e7c}, // Live partner-city lookup and owner political ID.
         // Capacity setter, conversion consumer, view producer, crowd count
         // generator and its constants. Reject changed semantics before writes.
         {0xbeb710, 270, 0xdf53aaa9}, {0xbeb310, 1024, 0x21f45f84},
@@ -1153,7 +1170,7 @@ static int install_rules(unsigned char *base)
             return 0;
         }
     }
-    if (settings.stalled_seconds) {
+    if (settings.stalled_seconds || settings.retire_stranded) {
         // Verified native order setter, including its ret 0x0c. Validate its
         // entire 212-byte body before enabling calls (FNV-1a of reference code).
         uint32_t hash = 2166136261u;
@@ -1228,6 +1245,7 @@ static int install_rules(unsigned char *base)
     if (ready) {
         recovery_image_base = reinterpret_cast<uintptr_t>(base);
         trade_transit_native_ready=transit_guard;
+        original_trade_arrival=reinterpret_cast<TradeArrival>(base+0xc42f80-kReferenceBase);
         trade_update_continue=reinterpret_cast<uintptr_t>(base)+0xdcc7c5-kReferenceBase;
         recovery_native_ready = Recovery::ValidateNative(base, uint32_t(recovery_image_base)-kReferenceBase);
         original_local_request=reinterpret_cast<LocalRequestSetter>(base+0xc43fa0-kReferenceBase);
@@ -1276,10 +1294,14 @@ void Initialize(HINSTANCE module)
         }
         portrait_reuse_ready = ai_observer_ready;
         portrait_pagination_enabled = ai_observer_ready;
+        if(settings.assist_rival_trade || settings.retire_stranded)
+            ModAPI::Log(trade_transit_native_ready && fleet_native_ready && ai_observer_ready
+                ? "[Better Civ Transit] Sea transport eligibility active: proposals and deliveries rechecked before native processing."
+                : "[Better Civ Transit] Sea transport eligibility disabled: unsupported code or lifecycle.");
         if(settings.retry_blocked_paths==2 || settings.ai_diagnostics)
             ModAPI::Log(trade_transit_native_ready && ai_observer_ready
                 ? (settings.retry_blocked_paths==2
-                    ? "[Better Civ Transit] Harbor test 1 active: delivery phases protected during detours; bounded retries before native path-failure cancellation."
+                    ? "[Better Civ Transit] Harbor test 2 active: verified partner cities; delivery phases protected during detours; bounded retries before native path-failure cancellation."
                     : "[Better Civ Transit] Harbor diagnostics active; movement recovery disabled.")
                 : "[Better Civ Transit] Disabled: unsupported native code or lifecycle; delivery detours disabled.");
         ModAPI::Log(trade_route_native_ready && ai_observer_ready
@@ -1288,14 +1310,14 @@ void Initialize(HINSTANCE module)
         if (settings.retry_blocked_paths)
             ModAPI::Log(recovery_native_ready && ai_observer_ready
                 ? (settings.retry_blocked_paths == 2
-                    ? "[Better Civ Placement] Fix 1 active: bounded AI detours survive same-goal refresh; quiet defense orders supported."
+                    ? "[Better Civ Placement] Test 2 active: bounded local detours and deep-overlap separation for player and AI."
                     : "[Better Civ Recovery] Test 1 active: guarded same-goal retries for crowded, stationary visible land/sea units; orders retained.")
                 : "[Better Civ Recovery] Unavailable: native or lifecycle check failed; keeping vanilla movement.");
         if (settings.retire_stranded || settings.rebalance_land)
             ModAPI::Log(fleet_native_ready && ai_observer_ready ? "[Better Civ Fleet] Fix 1 active: reachable enemy ports, stable local grace and retirement veto diagnostics."
                 : "[Better Civ Fleet] Disabled: unsupported native code or lifecycle.");
         if(settings.retire_stranded && fleet_native_ready && ai_observer_ready)
-            ModAPI::Log("[Better Civ Fleet] Stranded fleets fix 1 active: idle ships of all three specialties; assigned missions and player fleets protected.");
+            ModAPI::Log("[Better Civ Fleet] Stranded fleets test 2 active: idle combat ships try enemy ports; bounded retries; assigned missions and player fleets protected.");
         if (settings.rethink_offensives || settings.ai_diagnostics || settings.stalled_seconds)
             ModAPI::Log(ai_observer_ready ? "[Better Civ] Optional AI observer active."
                                          : "[Better Civ] AI observer unavailable; target selection remains native.");

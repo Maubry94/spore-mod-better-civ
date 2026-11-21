@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 namespace BetterCiv::Fleet {
-enum class Reason { None, NoPort, LandSurplus };
+enum class Reason { None, NoPort, LandSurplus, ReclaimPort };
 enum class Veto { Eligible, PlayerOrInvalid, Busy, Moving, NotCandidate, LowPressure,
     MapUnavailable, NotLand, HostileLand, NoBuilderPort, NoEnemyPort, EnoughShips, Garrison, Count };
 inline const char* VetoName(Veto v) {
@@ -26,6 +26,8 @@ inline Reason Choose(const Facts& f,bool stranded,bool surplus) {
 }
 struct Record {
     uint64_t key=0, owner=0, target=0, since=0, last_seen=0;
+    unsigned reclaim_attempts=0;
+    uint64_t next_reclaim=0;
     int region=-1;
     Reason reason=Reason::None;
     bool Observe(uint64_t new_owner,uint64_t new_target,Reason next,uint64_t now,int new_region=-1) {
@@ -34,8 +36,9 @@ struct Record {
         // not loyalty to one particular overseas city. Opportunity is checked
         // again before every sale. Moving to another landmass resets it.
         if (gap || next!=reason || new_owner!=owner || new_region!=region || next==Reason::None) since=now;
+        if(new_owner!=owner){reclaim_attempts=0;next_reclaim=0;}
         reason=next; owner=new_owner; target=new_target; region=new_region; last_seen=now;
-        return next!=Reason::None && now-since>=(next==Reason::NoPort?120000u:180000u);
+        return next!=Reason::None && now-since>=(next==Reason::ReclaimPort?30000u:next==Reason::NoPort?120000u:180000u);
     }
 };
 struct State {

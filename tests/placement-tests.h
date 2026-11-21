@@ -18,6 +18,14 @@ static void verify_placement_policy()
     // A reservation prevents a second unit from taking the same destination.
     const auto first=goal; space.Add(s.position,first,2,false);
     assert(P::FindSpace(s,2,space,flat,goal,report)); assert(P::Distance(first,goal)>=4.75f);
+    // Eight coincident vehicles can reserve separate endpoints on open ground.
+    P::Space stacked;for(unsigned i=0;i<8;++i)stacked.Add(s.position,s.position,2,true);
+    Math::Vector3 separated[7];
+    for(unsigned i=0;i<7;++i) {
+        assert(P::FindSpace(s,2,stacked,flat,separated[i],report));
+        for(unsigned j=0;j<i;++j)assert(P::Distance(separated[i],separated[j])>=4.75f);
+        stacked.Add(s.position,separated[i],2,false);
+    }
     // Starting overlapped is allowed only for vehicles, and the segment may
     // not deepen that overlap or cross an obstacle between its endpoints.
     assert(!P::ClearSegment(s.position,s.position,{10,0,500},1,{{5,0,500},0.1f,false},true));
@@ -188,6 +196,25 @@ static void verify_placement_adapter()
     }
     assert(placement_mock_moves==1 && combat_fixture_order.kind==2);
     u->mVelocity={}; n->mPosition={1,0,500};
+    // The reported player/AI stack: firing or moving units at identical
+    // positions must separate, while an anchor, normal spacing and new orders stay untouched.
+    n->mID=29;n->mPosition=u->mPosition={0,0,500};
+    for(bool player:{false,true}) {
+        civ->mIsPlayerOwned=player;
+        reset();n->mPosition=u->mPosition;u->mTimeSinceLastWeaponFireMS=0;
+        put_pointer(u,offsetof(Vehicle,mpTarget),n);
+        run(0,1500);assert(placement_mock_moves==1);
+        auto* record=placement_state.Find(object_key(u),1500);
+        assert(record->separating && record->hold_native && combat_fixture_order.kind==2 && reinterpret_cast<void*>(u->mpTarget.get())==n);
+        combat_fixture_order.kind=1;combat_fixture_order.position={99,0,500};u->field_208={99,0,500};
+        run(2000,2000);assert(!record->active && placement_mock_moves==1);
+        put_pointer(u,offsetof(Vehicle,mpTarget),nullptr);
+        reset();n->mPosition=u->mPosition;u->mVelocity={5,0,0};n->mVelocity=u->mVelocity;
+        run(0,1500);assert(placement_mock_moves==1);u->mVelocity=n->mVelocity={};
+        reset();n->mPosition={5,0,500};u->mTimeSinceLastWeaponFireMS=0;
+        run(0,2000);assert(!placement_mock_moves);
+    }
+    n->mID=31;n->mPosition={1,0,500};
     reset(); ai_time=9000; recover_blocked_movement(0,true); recover_blocked_movement(500,false);
     assert(!placement_mock_moves && !placement_state.records[0].key);
     run(10000,18000); assert(placement_mock_moves==1);

@@ -124,14 +124,14 @@ static_assert(offsetof(RivalPortraitSlot, civilization) == 8);
 static_assert(offsetof(Simulator::cCivilization, mCommRelPanelSlot) == 0x29c);
 static_assert(offsetof(Simulator::cCivilization, mCurrentCommEventId) == 0x2a0);
 
-inline uint32_t TradePartnerPoliticalId(const Simulator::cCityPartner& partner)
+inline Simulator::cCity* TradePartnerCity(const Simulator::cCityPartner& partner)
 {
-    // The current SDK labels this first word as mpInterCityRoad. The supported
-    // executable and v1.0 use it as a political ID. Copy the word without
-    // interpreting/dereferencing an intrusive_ptr or changing its refcount.
-    uint32_t id;
-    std::memcpy(&id, &partner, sizeof id);
-    return id;
+    // BDB350 loads word 0, then city+590h, then the owner's GetPoliticalID.
+    // Both SDK member labels are misleading here. This is a borrowed CITY
+    // pointer, not an ID or a road. Validate live membership before using it.
+    Simulator::cCity* city;
+    std::memcpy(&city, &partner, sizeof city);
+    return city;
 }
 
 static_assert(sizeof(Simulator::cCityPartner) == 12);

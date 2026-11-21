@@ -77,7 +77,7 @@
   </componentGroup>
   <componentGroup displayName="Stranded Fleets" unique="StrandedTraders">
     <component game="GalacticAdventures" displayName="Vanilla" description="Do not add automatic retirement for ships without a port." unique="StrandedVanilla" defaultChecked="true">BetterCiv-Option-StrandedVanilla.package</component>
-    <component game="GalacticAdventures" displayName="Gradual Sale" description="Experimental, AI only: sell idle military, religious and economic ships after 2 safe simulated minutes without any owned port. Recheck before each sale, at most one per nation every 30 seconds, with native refunds. Attack, defense, movement and trade orders are protected, as is nearby combat. Regaining any port cancels retirement. Timers reset on load." unique="StrandedSell" defaultChecked="false">BetterCiv-Option-StrandedSell.package</component>
+    <component game="GalacticAdventures" displayName="Gradual Sale" description="EXPERIMENTAL, AI only: after losing all ports, idle combat ships first try to capture an enemy port on the same sea. Idle economic ships and combat ships without an eligible port may be sold after 2 safe minutes, at most one per nation every 30 seconds. Preserve active combat missions and player fleets. Impossible sea trade requests are cancelled by the native behavior. Timers reset on load." unique="StrandedSell" defaultChecked="false">BetterCiv-Option-StrandedSell.package</component>
   </componentGroup>
   <componentGroup displayName="Surplus Land Units" unique="SurplusLand">
     <component game="GalacticAdventures" displayName="Vanilla" description="Keep native decisions about selling surplus land vehicles." unique="LandVanilla" defaultChecked="true">BetterCiv-Option-LandVanilla.package</component>

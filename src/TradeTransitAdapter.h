@@ -13,6 +13,62 @@ static bool trade_detour_phase(Vehicle& unit) {
 static bool trade_transit_log() {
     return settings.ai_diagnostics && trade_transit_state.lines<4096 && ++trade_transit_state.lines;
 }
+// These two callers fetch an order before any proposal, agreement or cargo
+// mutation. Return an empty borrowed view on proven port loss; the original
+// behavior tree performs its own cancellation and cleanup. Never sell a player
+// unit or invent an air route for a ship whose nation has no port.
+static bool trade_ship_impossible(Vehicle& unit,const VehicleOrder& order) {
+    if(unit.mLocomotion!=kVehicleWater || unit.mPurpose!=kVehicleEconomic ||
+        (order.kind!=5 && order.kind!=9))return false;
+    Civilization* owner=nullptr;City* destination=nullptr;
+    for(const auto& civ:portrait_civilizations()) {
+        if(!civ || civ->mbIsDestroyed)continue;
+        for(const auto& u:civ->mVehicles)if(u.get()==&unit)owner=civ.get();
+        for(const auto& city:civ->mCities)if(city.get()==order.target && city && !city->mbIsDestroyed)destination=city.get();
+    }
+    if(!owner || owner->mCities.empty() || !destination)return false; // Native owns invalid-object cases.
+    if(!fleet_has_port(*owner) || !fleet_physical_port(destination))return true;
+    // A port on another disconnected sea cannot service this ship either.
+    auto* planet=fleet_planet();
+    if(!planet || !planet->mContinentMap || planet->mContinentMapDirty || !fleet_continent)return false;
+    const auto valid_sea=[&](int id){return id>=0 && unsigned(id)<planet->mContinentAboveWater.size() && !planet->mContinentAboveWater[id];};
+    if(!Recovery::Finite(unit.mPosition))return false;
+    const int sea=fleet_continent(planet,unit.mPosition),target_sea=fleet_continent(planet,destination->field_32C);
+    if(!valid_sea(sea) || !valid_sea(target_sea))return false;
+    if(sea!=target_sea)return true;
+    for(const auto& c:owner->mCities)if(fleet_owned_city(c.get(),owner) && fleet_physical_port(c.get()) && fleet_continent(planet,c->field_32C)==sea)return false;
+    return true;
+}
+member_detour(feasible_trade_order,Vehicle,const VehicleOrder*()) {
+    const VehicleOrder* detoured() {
+        const auto* order=current_vehicle_order(this);
+        if(order && trade_transit_native_ready && fleet_native_ready && ai_observer_ready && in_civilization() &&
+            (settings.assist_rival_trade || settings.retire_stranded) && trade_ship_impossible(*this,*order)) {
+            static const VehicleOrder unavailable={};
+            if(trade_transit_log())ModAPI::Log("[Better Civ Transit] t=%llu event=cancel-impossible-sea-trade unit=%u order=%d",ai_time,mID,order->kind);
+            return &unavailable;
+        }
+        return order;
+    }
+};
+
+using TradeArrival=bool(__thiscall*)(Simulator::cLocomotiveObject*);
+static TradeArrival original_trade_arrival;
+static bool __fastcall trade_proposal_arrival(Simulator::cLocomotiveObject* locomotive,int) {
+    auto* unit=static_cast<Vehicle*>(locomotive);
+    if(settings.retry_blocked_paths==2 && trade_transit_native_ready && ai_observer_ready && in_civilization()) {
+        const auto* order=current_vehicle_order(unit);
+        if(order && order->kind==9)for(const auto& r:placement_state.records)if(r.key==object_key(unit)) {
+            auto s=r.imposed;s.order=order->kind;s.target=reinterpret_cast<uintptr_t>(order->target);
+            s.goal=unit->field_208;s.goal_stop=unit->field_214;s.acceptable_stop=unit->field_254;
+            if((r.active && Placement::OwnsStep(r.imposed,s)) ||
+                (ai_time<r.trade_settle_until && Placement::OwnsStep(r.original,s)))return false;
+            break;
+        }
+    }
+    return original_trade_arrival(locomotive);
+}
+
 static bool trade_delivery_valid(Vehicle& unit,const VehicleOrder& order) {
     if(order.kind!=5 || !order.target)return false;
     Civilization* owner=nullptr;City* partner=nullptr;
@@ -30,7 +86,7 @@ static bool trade_delivery_valid(Vehicle& unit,const VehicleOrder& order) {
     // partner table. No assumption that the nearest city is the home city.
     bool agreement=false;
     for(const auto& p:partner->mTradePartners)
-        if(Native::TradePartnerPoliticalId(p)==own)agreement=true;
+        if(trade_partner_id(p)==own)agreement=true;
     if(!agreement)return false;
     if(unit.mLocomotion==kVehicleWater && (!fleet_has_port(*owner) || !fleet_physical_port(partner)))return false;
     return true;

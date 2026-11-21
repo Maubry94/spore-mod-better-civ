@@ -103,8 +103,10 @@ progress. Travel, pauses and forced diplomatic targets must not be treated as
 ordinary stalled sieges. Reset transient histories on load.
 
 Movement recovery uses checked local native move requests, not teleportation or
-collision bypass. Respect changes of orders, active aiming, recent firing and
-player input. Bound candidate searches, detour legs, observation and retries.
+collision bypass. Respect changes of orders and player input. Ordinary jam recovery protects active
+aiming/recent fire; deep same-nation overlap is a separate bounded case for player
+and AI units, including firing units. Leave the lowest-ID unit as an anchor, require
+1.5 seconds of observed overlap and reserve checked distinct escape endpoints. Bound candidate searches, detour legs, observation and retries.
 The request thunk at `0xC9EA20` can hold an eligible AI escape against same-goal
 refreshes for at most six simulation seconds per leg; ordinary requests retain
 the original setter at `0xC43FA0`. Do not construct/copy the incomplete SDK request
@@ -117,9 +119,12 @@ membership is a conservative opportunity check, not proof of a navigable approac
 Keep local idle grace across eligible overseas target changes. Do not infer
 successful retirement from disappearance alone: the native AI can sell units too.
 
-Portless retirement covers military, religious and economic AI ships, with every
-explicit mission protected. It does not cancel a stale mission to make a ship
-eligible. Use the native refund and shared per-nation sale spacing; never sell
+Portless retirement protects explicit combat missions. Idle military/religious
+ships first seek a hostile physical port on the same connected sea after 30 seconds;
+use normal attack/conversion orders, at most two attempts per ship, two minutes
+apart. Regaining a port renews this budget. Missing map data defers the decision;
+a known absence of an enemy port permits ordinary retirement. Idle economic
+ships retain the two-minute retirement grace. Use the native refund and shared per-nation sale spacing; never sell
 player units. Numerical eligibility and timing rules are in [INSTALLERS.md](INSTALLERS.md).
 
 ### Trade ribbons
@@ -136,6 +141,19 @@ nine gate pairs per revision, 64 records and 4,096 sampled points. Reset transie
 caches on load/mode changes. A repaired ribbon does not prove a delivery occurred.
 
 ### Trade transit
+
+The first word of `cCityPartner` is a borrowed city pointer, despite the SDK's
+road-pointer label. `0xBDB350` is guarded and executed by the reference tests:
+read the live city's owner political ID only after validating membership, not
+the pointer bits or the SDK's second word. This also serves rival-trade checks.
+
+At the proposal/delivery order-getter callers (`0xDCA0B0`, `0xDCC7F1`), reject a
+ship's trade request if its nation has no usable port, its destination is inland,
+or a valid continent map proves the seas disconnected. Return a borrowed empty
+order view: the native behavior tree performs its normal cancellation. No air
+fallback, agreement deletion, cargo write or player-unit sale is introduced.
+The proposal arrival caller (`0xDCA6B9`) also rejects a temporary detour endpoint
+as arrival, until the original local request is restored.
 
 The guarded delivery update entry at `0xDCC7C0` keeps its native stack, registers
 and phase record. Its phase dispatch, arrival helper and diagnostic-string

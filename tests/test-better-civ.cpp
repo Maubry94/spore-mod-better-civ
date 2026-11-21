@@ -15,7 +15,7 @@ enum {
     kCityTradePartnersBegin=0x55c, kCityTradePartnersEnd=0x560,
     kVehiclePurpose=0xb20, kVehicleHitFlag=0xbcc
 };
-struct TradePartner { uint32_t political_id; void* route; int type; };
+struct TradePartner { void* city; void* route; int type; };
 using PoliticalId=uint32_t (__thiscall*)(const void*);
 static const void* read_pointer(const void* object, size_t offset) {
     const void* value;
@@ -570,6 +570,10 @@ static void verify_trade_under_fire(float (__cdecl *predicate)(void *))
     assert(predicate(vehicle) == 1.0f);
 }
 
+static uint32_t fixture_trade_partner_id(const Simulator::cCityPartner& p) {
+    const auto* city=Native::TradePartnerCity(p);
+    return city ? mock_political_id(read_pointer(city,0x590),0) : UINT32_MAX;
+}
 static void verify_rival_trade(void)
 {
     unsigned char origin[0xb8] = {0}, partner[0xa4] = {0};
@@ -586,7 +590,9 @@ static void verify_rival_trade(void)
     partner[0x24] = 2;
     trade_player[0x24] = 3;
     trade_player[kCivIsPlayerOwned] = 1;
-    TradePartner route = {3, NULL, 0};
+    unsigned char player_city[0x594]={}; put_pointer(player_city,0x590,trade_player);
+    TradePartner route = {player_city, NULL, 0};
+    trade_partner_id=fixture_trade_partner_id;
     put_pointer(home, kCityTradePartnersBegin, &route);
     put_pointer(home, kCityTradePartnersEnd, &route + 1);
     void *cities[] = {home};
@@ -615,9 +621,9 @@ static void verify_rival_trade(void)
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     order.target = target;
     assert(call_trade_acceptance(NULL, target, origin) == 1.0f);
-    route.political_id = 2;
+    route.city = target;
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
-    route.political_id = 3;
+    route.city = player_city;
     partner_opinion = 1;
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     partner_opinion = 2;
@@ -631,6 +637,7 @@ static void verify_rival_trade(void)
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     native_trade = 0.6f;
     assert(call_trade_acceptance(NULL, target, origin) == 0.6f);
+    trade_partner_id=live_trade_partner_id;
 }
 
 #include "conversion-capacity-tests.h"
@@ -877,6 +884,14 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
                    reinterpret_cast<uintptr_t>(configured_palette_int));
         }
     }
+    for(const auto hook: {std::pair<uint32_t,uintptr_t>{0xdca0b0,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},
+        {0xdcc7f1,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},
+        {0xdca6b9,reinterpret_cast<uintptr_t>(trade_proposal_arrival)}}) {
+        const auto* site=image+hook.first-kReferenceBase;uint32_t relative;memcpy(&relative,site+1,4);
+        const bool transport_enabled=hook.first==0xdca6b9?settings.retry_blocked_paths==2:bool(settings.assist_rival_trade || settings.retire_stranded);
+        const uintptr_t expected=transport_enabled?hook.second:reinterpret_cast<uintptr_t>(image)+(hook.first==0xdca6b9?0xc42f80:0xca7360)-kReferenceBase;
+        assert(site[0]==0xe8 && reinterpret_cast<uintptr_t>(site)+5+relative==expected);
+    }
     const uint32_t commerce_sites[] = {0xbfb446, 0xbfb7bc, 0xdca391};
     for (size_t i = 0; i < sizeof commerce_sites / sizeof commerce_sites[0]; ++i) {
         unsigned char *site = image + commerce_sites[i] - kReferenceBase;
@@ -912,6 +927,7 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
 #include "trade-route-tests.h"
 #include "movement-fleet-fix-tests.h"
 #include "trade-transit-tests.h"
+#include "harbor-fix2-tests.h"
 
 int main(int argc, char *argv[])
 {
@@ -1027,6 +1043,7 @@ int main(int argc, char *argv[])
     verify_trade_geometry();
     verify_trade_adapter();
     verify_trade_transit();
+    verify_harbor_fix2();
     verify_conversion_capacity();
     puts("Diplomacy slot reuse, priority, map/reference ownership and lifecycle checks passed.");
     verify_reference_writes(argv[1], 0);

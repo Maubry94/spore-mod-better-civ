@@ -38,7 +38,7 @@ def public_manifest():
     choice(ai, 'BetterAI', 'Better AI',
            'EXPERIMENTAL: Reconsider failed offensives; abandon engaged sieges after 3 minutes without a new conquest or conversion high, '
            'then avoid that city for 2 minutes. Help blocked vehicles find nearby space. '
-           'Gradually sell idle surplus AI land units to make room for ships, and idle AI ships after all ports are lost. '
+           'Gradually sell idle surplus AI land units to make room for ships. After all ports are lost, idle combat ships try an enemy port; idle ships without a useful role can be sold. '
            'Protect active missions and player fleets from sales.')
     diagnostics = deepcopy(next(g for g in groups if g.get('unique') == 'AIDiagnostics'))
     diagnostics.set('displayName', 'AI Diagnostics (Dev)')

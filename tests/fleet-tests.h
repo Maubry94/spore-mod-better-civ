@@ -39,6 +39,8 @@ static int __fastcall fleet_mock_continent(Simulator::cPlanetModel*,int,const Ma
 static void __fastcall fleet_mock_sell(Vehicle* u,int,bool refund) {
     assert(refund); ++fleet_mock_sales; u->mbDead=true;
 }
+static Simulator::cPlanetModel* fleet_fixture_world;
+static Simulator::cPlanetModel* fleet_test_planet(){return fleet_fixture_world;}
 static void verify_fleet_adapter()
 {
     alignas(8) unsigned char cb[sizeof(Civilization)]={},ub[sizeof(Vehicle)]={},nb[sizeof(Vehicle)]={},ct[sizeof(City)]={};
@@ -52,6 +54,12 @@ static void verify_fleet_adapter()
     put_pointer(civ,kCivCitiesBegin,cities); put_pointer(civ,kCivCitiesEnd,cities+1);
     put_pointer(city,offsetof(City,mpCivilization),civ);
     for(auto* v:units) {v->mHealthPoints=100;v->mLocomotion=kVehicleWater;v->mPurpose=kVehicleEconomic;v->mTimeSinceLastWeaponFireMS=60000;}
+    alignas(8) unsigned char world_bytes[sizeof(Simulator::cPlanetModel)]={};
+    auto* world=reinterpret_cast<Simulator::cPlanetModel*>(world_bytes);fleet_fixture_world=world;
+    bool land[]={false};uint32_t map=0;world->mContinentMap=&map;
+    put_pointer(world,offsetof(Simulator::cPlanetModel,mContinentAboveWater),land);
+    put_pointer(world,offsetof(Simulator::cPlanetModel,mContinentAboveWater)+4,land+1);
+    const auto old_planet=fleet_planet;fleet_planet=fleet_test_planet;
     const auto old_order=current_vehicle_order; current_vehicle_order=reinterpret_cast<CurrentVehicleOrder>(combat_fixture_order_getter);
     combat_fixture_order={}; portrait_fixture_civs.push_back(civ); portrait_civilizations=mock_portrait_civilizations;
     const auto old_sell=fleet_sell; const auto old_water=fleet_water; const auto old_continent=fleet_continent;
@@ -106,13 +114,11 @@ static void verify_fleet_adapter()
     ai_time=182000;manage_unused_fleets(0,true);manage_unused_fleets(2000,false);assert(!fleet_mock_sales);
     run(182000,182000);assert(fleet_mock_sales==1);
     portrait_fixture_civs.clear();portrait_civilizations=sdk_portrait_civilizations;current_vehicle_order=old_order;
-    fleet_sell=old_sell;fleet_water=old_water;fleet_continent=old_continent;fleet_native_ready=ai_observer_ready=false;
+    fleet_planet=old_planet;fleet_sell=old_sell;fleet_water=old_water;fleet_continent=old_continent;fleet_native_ready=ai_observer_ready=false;
     fleet_state={};settings=defaults;assert(ai_refs==0);
     puts("Fleet adapter: native refund call, one sale per 30s, usable-port cancellation, trade/player/movement protection, pause and load reset passed.");
     puts("Stranded fleets: all three ship specialties, mixed-fleet cooldown, retained missions, regained port, player/combat protection, land/air exclusion and legacy setting IDs passed.");
 }
-static Simulator::cPlanetModel* fleet_fixture_world;
-static Simulator::cPlanetModel* fleet_test_planet(){return fleet_fixture_world;}
 static bool fleet_test_enemy(Civilization&,Civilization&){return true;}
 static int __fastcall fleet_test_continent(Simulator::cPlanetModel*,int,const Math::Vector3& p){return int(p.x);}
 static void verify_land_fleet_adapter()

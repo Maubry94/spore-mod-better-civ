@@ -194,7 +194,12 @@ struct Record {
     uint64_t next_watch = 0;
     unsigned attempts = 0;
     bool tracking = false, active = false, moving_window = false, loop_detected = false;
-    bool hold_native = false;
+    bool hold_native = false, separating = false;
+    uint64_t overlap_since=0, overlap_peer=0;
+    bool Overlap(uint64_t peer,uint64_t now) {
+        if(!peer || peer!=overlap_peer){overlap_peer=peer;overlap_since=now;return false;}
+        return now>=overlap_since+1500 && now>=cooldown && attempts<2;
+    }
     void Window(const Sample& s, uint64_t now) {
         signature = s; anchor = previous = s.position; start = now; path = 0;
         direction={}; turns=excursion=0; window_goal=s.goal; loop_detected=false;
@@ -235,11 +240,11 @@ struct Record {
     void Begin(const Sample& s, const Vector3& goal, float footprint, uint64_t now) {
         ++attempts; cooldown = now+kCooldownMS; original = imposed = s;
         imposed.goal = reserved_goal = goal; imposed.goal_stop = 1; imposed.acceptable_stop = 2;
-        step_origin = s.position; radius = footprint; active = true; blocked_resumes=0; hold_native=false;trade_settle_until=0;
+        step_origin = s.position; radius = footprint; active = true; separating=false; blocked_resumes=0; hold_native=false;trade_settle_until=0;
         step_until = now+kStepMS; followup_at = now+5000; reserved_until = now+8000;
         Window(s,now);
     }
-    void Finish(const Sample& s, uint64_t now) { active = hold_native = false; Window(s,now); last_seen = now; }
+    void Finish(const Sample& s, uint64_t now) { active = hold_native = separating = false; Window(s,now); last_seen = now; }
 };
 struct State {
     Record records[Recovery::kMaxRecords];

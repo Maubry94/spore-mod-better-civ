@@ -29,14 +29,16 @@ their defaults are copied unchanged to the public installer.
 
 - Reconsiders a target after 2-4 failed waves, subject to native eligibility and an available alternative.
 - Cancels identified city-attack orders after 3 simulated minutes without a new maximum of the conquest/conversion gauge. Observation starts near the city with at least three assigned attackers. A 2-minute cooldown prevents immediately retrying that city. Forced diplomatic targets are excluded; survivors can still fight locally.
-- Tries bounded nearby detours for blocked approaches and quiet loops. Combat and explicit orders take priority. An actually idle player unit can yield space; player fleets are never sold by these rules. Some jams and circling remain unresolved.
-- Keeps commercial loading/delivery phases suspended during its temporary detours. Eligible native trade-path failures get at most two same-point retries per episode, with a one-second grace each; cancelled or already missing trade orders are never recreated.
+- Tries bounded nearby detours for blocked approaches and quiet loops. Explicit new orders take priority. A separate deep-overlap check can separate firing or moving friendly units, for player and AI. An actually idle player unit can yield space; player fleets are never sold by these rules. Some jams and circling remain unresolved.
+- Prevents a temporary detour endpoint from being treated as arrival for a proposal or delivery. Eligible native trade-path failures get at most two same-point retries per episode, with a one-second grace each; cancelled or already missing trade orders are never recreated.
 - After 3 safe idle minutes, may sell surplus combat land units when an AI has at least 32 vehicles, no hostile city on that continent, a matching-specialty producing port and a reachable overseas enemy port. Retains at least six ground defenders per owned local city; stops when six ships of that specialty exist. The native AI decides what to buy.
-- After 2 safe idle minutes, may sell unassigned military, religious or economic AI ships when their nation still has cities but owns no port. Any regained port or new mission resets eligibility. All explicit missions, including defense and trade, are protected.
+- After 2 safe idle minutes, may sell unassigned military, religious or economic AI ships when their nation still has cities but owns no port. Combat ships first try a hostile port on the same sea after 30 idle seconds, using at most two attempts two minutes apart; regaining a port renews this budget. Missing map data defers the decision. Explicit combat missions remain protected.
 
 Sales use native refunds and a shared limit of one unit per nation every
 30 seconds. Timers exclude pauses and reset on load. These rules do not declare
 new wars, teleport units, or change city terrain.
+
+Sea trade proposals and deliveries are revalidated when Better Trade or portless-fleet management is enabled. A missing home/destination port, or a proven disconnected sea, lets the native behavior cancel the impossible ship request. Agreements are not deleted and player ships are not sold.
 
 ## Compatibility and validation
 

@@ -30,6 +30,25 @@ static bool fleet_hostile(Civilization& a,Civilization& b) {
     return relation>=0 && relation<=1;
 }
 static bool (*fleet_are_enemies)(Civilization&,Civilization&)=fleet_hostile;
+// Find an enemy port on the ship's own connected sea. Geography is checked
+// without requiring a builder city, since the nation just lost its ports.
+static bool fleet_reclaim_target(Civilization& civ,Vehicle& unit,City*& target) {
+    target=nullptr;
+    auto* planet=fleet_planet();
+    if(!planet || !planet->mContinentMap || planet->mContinentMapDirty || !Recovery::Finite(unit.mPosition))return false;
+    const int sea=fleet_continent(planet,unit.mPosition);
+    if(sea<0 || unsigned(sea)>=planet->mContinentAboveWater.size() || planet->mContinentAboveWater[sea])return false;
+    float closest=INFINITY;
+    for(const auto& other:portrait_civilizations()) {
+        if(!other || other->mbIsDestroyed || other.get()==&civ || !fleet_are_enemies(civ,*other))continue;
+        for(const auto& city:other->mCities)if(fleet_owned_city(city.get(),other.get()) && fleet_physical_port(city.get()) &&
+            fleet_continent(planet,city->field_32C)==sea) {
+            const float distance=Recovery::Distance(unit.mPosition,city->field_32C);
+            if(distance<closest){target=city.get();closest=distance;}
+        }
+    }
+    return true;
+}
 struct FleetAudit { Fleet::Facts facts; Fleet::Veto veto=Fleet::Veto::NotCandidate; int region=-1; };
 static Fleet::Reason fleet_reason(Civilization& civ,Vehicle& u,City*& target,FleetAudit* audit=nullptr) {
     namespace F=Fleet;
@@ -56,6 +75,10 @@ static Fleet::Reason fleet_reason(Civilization& civ,Vehicle& u,City*& target,Fle
         if(order->kind!=0)return finish(F::Veto::Moving);
         // A remaining port of any specialty vetoes portless retirement.
         f.no_port=!fleet_has_port(civ);
+        if(f.no_port && u.mPurpose!=kVehicleEconomic) {
+            if(!fleet_reclaim_target(civ,u,target))return finish(F::Veto::MapUnavailable);
+            if(target)return finish(F::Veto::Eligible,F::Reason::ReclaimPort);
+        }
         return finish(f.no_port?F::Veto::Eligible:F::Veto::NotCandidate,F::Choose(f,true,false));
     }
     if (!settings.rebalance_land || !f.combat_land)return finish(F::Veto::NotCandidate);
@@ -117,6 +140,7 @@ static void manage_unused_fleets(int delta,bool civ_mode) {
         if(!civ || civ->mbIsDestroyed || civ->mIsPlayerOwned || civ->mCities.empty())continue;
         auto* nation=fleet_state.FindNation(object_key(civ.get()));
         if(!nation)continue;
+        const bool owns_port=fleet_has_port(*civ);
         unsigned counts[unsigned(Fleet::Veto::Count)]={};uint64_t oldest=0;
         FleetAudit example;unsigned example_id=0,example_target=0;
         for(const auto& unit:civ->mVehicles) {
@@ -128,8 +152,10 @@ static void manage_unused_fleets(int delta,bool civ_mode) {
             }
             if(!fleet_live(unit.get()))continue;
             auto* r=fleet_state.Find(object_key(unit.get()),ai_time); if(!r)continue;
+            if(owns_port){r->reclaim_attempts=0;r->next_reclaim=0;}
             if(r->Observe(object_key(civ.get()),object_key(target),why,ai_time,audit.region) &&
-                ai_time>=nation->next_sale && !chosen) {chosen=unit.get();owner=civ.get();reason=why;}
+                ai_time>=nation->next_sale && !chosen &&
+                (why!=Fleet::Reason::ReclaimPort || (r->reclaim_attempts<2 && ai_time>=r->next_reclaim))) {chosen=unit.get();owner=civ.get();reason=why;}
             if(why!=Fleet::Reason::None)oldest=std::max(oldest,ai_time-r->since);
         }
         if(settings.ai_diagnostics && ai_time>=nation->next_review && fleet_state.lines<4096) {
@@ -143,6 +169,19 @@ static void manage_unused_fleets(int delta,bool civ_mode) {
     City* target=nullptr;
     if(fleet_reason(*owner,*chosen,target)!=reason)return;
     auto* nation=fleet_state.FindNation(object_key(owner));
+    if(reason==Fleet::Reason::ReclaimPort) {
+        auto* r=fleet_state.Find(object_key(chosen),ai_time);
+        if(!target || !r || !set_vehicle_order || r->reclaim_attempts>=2 || ai_time<r->next_reclaim)return;
+        ++r->reclaim_attempts;r->next_reclaim=ai_time+120000;
+        nation->next_sale=ai_time+2000;
+        if(settings.ai_diagnostics && fleet_state.lines++<4096)
+            ModAPI::Log("[Better Civ Fleet] t=%llu event=reclaim-port civ=%u unit=%u target=%u purpose=%d attempt=%u",
+                ai_time,owner->mID,chosen->mID,target->mID,chosen->mPurpose,r->reclaim_attempts);
+        // Only an idle AI combat ship. Use the normal attack/conversion order;
+        // the native navigator and combat still decide how the mission proceeds.
+        set_vehicle_order(chosen,target,chosen->mPurpose==kVehicleMilitary?2:3,0);
+        return;
+    }
     nation->next_sale=ai_time+30000;
     if(settings.ai_diagnostics && fleet_state.lines++<4096)
         ModAPI::Log("[Better Civ Fleet] t=%llu event=sell civ=%u unit=%u reason=%s purpose=%d locomotion=%d vehicles-before=%u",

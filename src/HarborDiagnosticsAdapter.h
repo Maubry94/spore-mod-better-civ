@@ -63,8 +63,8 @@ static void observe_harbors(int delta,bool civ_mode) {
     for(const auto& civ:portrait_civilizations())if(civ && !civ->mbIsDestroyed)
         for(const auto& city:civ->mCities)if(city && !city->mbIsDestroyed)
             for(const auto& p:city->mTradePartners) {
-                pair_hash(city.get(),p.mpPartnerCity.get(),3);
-                const uint32_t id=Native::TradePartnerPoliticalId(p);
+                pair_hash(city.get(),Native::TradePartnerCity(p),3);
+                const uint32_t id=trade_partner_id(p);
                 hash=TradeRoutes::HashBytes(hash,&id,sizeof(id));
             }
     if(hash==harbor_route_hash)return;
@@ -81,5 +81,5 @@ static void observe_harbors(int delta,bool civ_mode) {
         for(const auto& city:civ->mCities)if(city && !city->mbIsDestroyed)
             for(const auto& p:city->mTradePartners)if(harbor_log())
                 ModAPI::Log("[Better Civ Harbor] t=%llu event=agreement city=%u owner=%u partner-city=%u partner-owner=%u",
-                    ai_time,city->mID,city->mPoliticalID,harbor_city_id(p.mpPartnerCity.get()),Native::TradePartnerPoliticalId(p));
+                    ai_time,city->mID,city->mPoliticalID,harbor_city_id(Native::TradePartnerCity(p)),trade_partner_id(p));
 }

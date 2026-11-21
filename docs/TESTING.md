@@ -38,7 +38,7 @@ remains untested. Preserve a useful save when possible; logs do not require savi
 | Check | Required observation/evidence |
 | --- | --- |
 | Surplus land units | On a peaceful landmass, observe eligible military/religious surplus, gradual `reason=surplus-land` sales, retained garrison and continued native fleet decisions. The religious Citron report remains unconfirmed after the latest eligibility changes. A sale need not immediately produce a ship. |
-| Lost final port | For idle military, religious and economic AI ships, observe `reason=no-owned-port` after two safe idle minutes, with at most one sale per nation per 30 seconds. Active missions/player fleets stay protected; regaining a port stops eligibility. Explicitly assigned ships are intentionally not sold even if their mission seems useless. |
+| Lost final port | For idle economic ships or combat ships without a same-sea enemy-port opportunity, observe `reason=no-owned-port` after two safe idle minutes, with at most one sale per nation per 30 seconds. Active missions/player fleets stay protected; regaining a port stops eligibility. Explicitly assigned ships are intentionally not sold even if their mission seems useless. |
 | Stalled offensive | After engagement, three unpaused minutes without a new gauge high can abandon the siege. Check no immediate retry during the two-minute cooldown and an alternative target when eligible. A progressing attack continues. Survivors may still fight locally. |
 | Movement and commerce | If a queue occurs, watch for about 30 seconds without intervention; correlate requests with follow-up displacement, resumed attacks/deliveries and your own new orders. A clearance request alone is not successful recovery. |
 | Trade after ownership changes | Check the land ribbon is plausible, or hidden if no verified route exists, while agreements and deliveries still behave correctly. Compare with the on-screen state. |
@@ -90,34 +90,36 @@ During an assisted live session, inspect new blocks regularly and keep a short
 list of confirmed events, unresolved reports and missing situations. This needs
 an active reader; it is not automatic unattended monitoring between sessions.
 
-## Harbor test 1 (local candidate, 2026-11-20)
+## Harbor test 2 (local candidate, 2026-11-20)
 
-The completed Asprica RC1 session recorded three stalled abandonments and two
-military retargets followed by deployment. No mod fleet-sale event was captured.
-It also recorded the player's economic ship losing its trade order at Alanguesse
-twice; the second trip was fully automatic and the player confirmed continued
-peace and an active agreement. The old log does not record the exact native
-cancellation cause. Local detours sometimes moved ships without restoring a
-complete round trip.
+Test 1 on Romes captured an explicit economic ship retirement after final-port
+loss and one stalled-offensive abandonment, retarget and later return beyond its
+two-minute cooldown. Other fleets continued native deliveries normally. It also
+exposed a mistaken partner-table layout that vetoed transit recovery; that
+recovery cannot be declared validated from test 1. AI and player land units were
+recorded at essentially identical coordinates, including while moving/firing.
+The overlap save and final statu quo were preserved separately.
 
-The candidate protects delivery phases during a mod detour and briefly retries
-eligible native path failures without changing orders or cargo. It does not
-restore already missing orders. Resume an existing campaign, restart a previously
-idle trader manually once if needed, then let several round trips run unattended.
-Check that deliveries still occur, congestion can clear, and a new manual move
-or cancelled agreement takes priority. Observe for at least 30 seconds before
-intervening in a queue; report the city and time.
+Test 2 corrects the live partner lookup, revalidates a ship's trade proposal and
+delivery against remaining ports, attempts local separation for deep overlaps,
+and gives idle portless combat ships a bounded same-sea enemy-port mission before
+retirement. A failed clearance endpoint is excluded from the next local attempt.
+Proposal arrival is protected during temporary detours. These changes require
+live confirmation; offline tests are not game validation.
 
-Native route endpoints and agreement partners are now logged separately to
-investigate the Rupon/Miraisotte display discrepancy. Sea ribbon geometry is
-unchanged. The religious Turquoise aircraft alternated distant building targets
-while stationary for over 30 simulation minutes; this remains unresolved. The
-physical stationary timer no longer resets merely when the aim changes, and its
-acceptable movement area and last native message are included in diagnostics.
+Keep the same settings: Cost50, native firing/speed, OffensiveUnits16, Population30,
+Funds8000, Balanced333, KeepSpecialty, EightSlotsPerCity, BetterTrade, BetterAI,
+DiagnosticsOn. Focus on stacked attacks/movement for both sides, preservation of
+manual commands, a proposer losing its final port, and idle military/religious
+ships retaining a possible enemy-port objective. Follow-ups must show actual
+separation/delivery/capture, not only an issued recovery order.
 
-Both the earlier Alanguesse save and final statu quo were copied and hash-checked
-outside the game directory. Reloading may clear an existing jam, so reproduction
-after loading is not assumed. This candidate has not yet been tested in game.
+The road painted on the terrain at Rachan remains unresolved. The previous ribbon
+validator hid an unverified line; it did not repair the separate native road.
+Sea/air ribbon geometry and the isolated religious aircraft remain open too.
+Request-kind-0 path failures are deliberately not retried using an unproven stale
+goal. Reloading can clear a jam, so preservation does not guarantee reproduction.
+
 Ask the player when to start live log following after delivering a new candidate;
 do not launch monitoring or the game automatically.
 

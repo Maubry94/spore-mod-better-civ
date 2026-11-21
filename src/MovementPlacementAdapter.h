@@ -37,6 +37,20 @@ static bool placement_contact(const Vehicle& unit, const Math::Vector3& goal) {
     }
     return false;
 }
+// Deep overlap is independent of movement and firing. Keep one anchor in each
+// friendly cluster; units with larger stable IDs yield through normal MoveTo.
+static uint64_t placement_overlap_peer(const Vehicle& unit,const Civilization& civ) {
+    if(!Recovery::Finite(unit.mPosition) || !std::isfinite(unit.mFootprintRadius) ||
+        unit.mFootprintRadius<=0 || unit.mFootprintRadius>8)return 0;
+    for(const auto& other:civ.mVehicles) {
+        if(!placement_live(other.get()) || other->mID>=unit.mID ||
+            other->mLocomotion!=unit.mLocomotion || !Recovery::Finite(other->mPosition) ||
+            !std::isfinite(other->mFootprintRadius) || other->mFootprintRadius<=0 || other->mFootprintRadius>8)continue;
+        if(Recovery::Distance(unit.mPosition,other->mPosition)<0.35f*(unit.mFootprintRadius+other->mFootprintRadius))
+            return object_key(other.get());
+    }
+    return 0;
+}
 static bool placement_watch_log() {
     return settings.ai_diagnostics && placement_state.watch_lines<2048 && (++placement_state.watch_lines!=0);
 }
@@ -99,6 +113,9 @@ static bool placement_find_space(Vehicle& unit, const Recovery::Sample& s,
         if (r.key != s.key && r.reserved_until > ai_time)
             space.Add(s.position,r.reserved_goal,r.radius,false);
     }
+    for(const auto& r:placement_state.records)if(r.key==s.key && r.attempts &&
+        P::Distance(s.position,r.step_origin)<1 && P::Finite(r.imposed.goal))
+        space.Add(s.position,r.imposed.goal,std::max(2.0f,radius),false);
     report.reason="no-clear-candidate";
     auto project = [&](const Math::Vector3& raw, Math::Vector3& out) {
         if (air) return P::ProjectAir(raw,radius,altitude,sea,
@@ -152,7 +169,7 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
     if (!recovery_native_ready || !ai_observer_ready || !civ_mode || deltaGameTime <= 0 ||
         !current_vehicle_order || ai_time < placement_state.next_sample) return;
     placement_state.next_sample = ai_time+500;
-    struct Due { Vehicle* unit; P::Record* record; Recovery::Sample sample; bool player; };
+    struct Due { Vehicle* unit; P::Record* record; Recovery::Sample sample; bool player; bool separate; };
     Due due[Recovery::kMaxRecords]; unsigned count = 0, observed = 0, stationary = 0, aim_blocked = 0, firing_blocked = 0;
     unsigned traders=0, supported_traders=0, loops=0;
     for (const auto& civ : portrait_civilizations()) {
@@ -196,10 +213,10 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
             if (r->active) {
                 r->last_seen=ai_time;
                 const bool owned=P::OwnsStep(r->imposed,s);
-                const bool safe=s.eligible && P::Finite(s.position) && quiet && s.since_fire>=8000;
+                const bool safe=s.eligible && P::Finite(s.position) && (r->separating || (quiet && s.since_fire>=8000));
                 const bool arrived=P::Finite(s.position) && P::Distance(s.position,r->imposed.goal)<=2.5f;
                 const bool expired=ai_time>=r->step_until;
-                if (owned && safe && arrived && s.order!=0 && r->attempts<2 &&
+                if (!r->separating && owned && safe && arrived && s.order!=0 && r->attempts<2 &&
                     placement_contact(*unit,r->original.goal)) {
                     // One bounded second leg can go around the remaining queue.
                     // Preserve the original strategic request across both legs.
@@ -225,21 +242,23 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
                     r->Finish(s,ai_time);
                     if (resume) {
                         recovery_apply(*unit,latest_original);
-                        if(s.order==5)r->trade_settle_until=ai_time+500;
+                        if(s.order==5 || s.order==9)r->trade_settle_until=ai_time+500;
                     }
                 }
                 continue;
             }
             const bool ready=r->Observe(s,quiet,ai_time);
             loops+=r->loop_detected;
-            if (ready && count<Recovery::kMaxRecords) due[count++]={unit.get(),r,s,civ->mIsPlayerOwned};
+            const auto overlap=placement_overlap_peer(*unit,*civ);
+            const bool separate=r->Overlap(s.eligible?overlap:0,ai_time);
+            if ((ready || separate) && count<Recovery::kMaxRecords) due[count++]={unit.get(),r,s,civ->mIsPlayerOwned,separate};
             // Focused diagnostics survive the general trajectory log's cap.
             // Include unsupported local requests so an exclusion is visible.
-            if ((r->loop_detected || (trader && s.desired>1 && s.speed<0.5f)) && ai_time>=r->next_watch) {
+            if ((overlap || r->loop_detected || (trader && s.desired>1 && s.speed<0.5f)) && ai_time>=r->next_watch) {
                 r->next_watch=ai_time+60000;
-                if (placement_watch_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=watch unit=%u civ=%u purpose=%d locomotion=%d order=%d request=%d pending=%d flags=%u supported=%d crowded=%d loop=%d wait-ms=%llu path=%.2f net=%.2f turns=%.1f position=%.2f,%.2f,%.2f local-goal=%.2f,%.2f,%.2f speed=%.2f desired=%.2f aim=%d since-fire=%.0f",
+                if (placement_watch_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=watch unit=%u civ=%u purpose=%d locomotion=%d order=%d request=%d pending=%d flags=%u supported=%d crowded=%d overlap-peer=%llu loop=%d wait-ms=%llu path=%.2f net=%.2f turns=%.1f position=%.2f,%.2f,%.2f local-goal=%.2f,%.2f,%.2f speed=%.2f desired=%.2f aim=%d since-fire=%.0f",
                     ai_time,unit->mID,civ->mID,unit->mPurpose,unit->mLocomotion,s.order,unit->field_250,!unit->field_1F4.empty(),
-                    unsigned(unit->field_270),s.eligible,s.crowded,r->loop_detected,ai_time-r->start,r->path,
+                    unsigned(unit->field_270),s.eligible,s.crowded,overlap,r->loop_detected,ai_time-r->start,r->path,
                     P::Distance(s.position,r->anchor),r->turns*57.2957795f,
                     s.position.x,s.position.y,s.position.z,s.goal.x,s.goal.y,s.goal.z,s.speed,s.desired,!quiet,s.since_fire);
             }
@@ -254,7 +273,7 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
     const auto& c=due[placement_state.cursor++%count];
     Math::Vector3 goal; P::SearchReport report;
     placement_state.next_step=ai_time+2000;
-    if (placement_yield_idle(*c.unit,c.sample)) { c.record->cooldown=ai_time+10000; return; }
+    if (!c.separate && placement_yield_idle(*c.unit,c.sample)) { c.record->cooldown=ai_time+10000; return; }
     if (!placement_plan(*c.unit,c.sample,goal,report) || !P::Finite(goal)) {
         c.record->cooldown=ai_time+20000;
         if (placement_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=no-space unit=%u civ=%u reason=%s terrain-rejected=%u occupied-rejected=%u",
@@ -263,9 +282,10 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
     }
     const auto waited=ai_time-c.record->start;
     const auto path=c.record->path;
-    const auto reason=c.record->loop_detected?"quiet-loop":"stationary-contact";
+    const auto reason=c.separate?"deep-overlap":c.record->loop_detected?"quiet-loop":"stationary-contact";
     c.record->Begin(c.sample,goal,c.unit->mFootprintRadius,ai_time);
-    c.record->hold_native=!c.player && (c.sample.order==2 || c.sample.order==3 || c.sample.order==5 || c.sample.order==7 || c.sample.order==9);
+    c.record->separating=c.separate;
+    c.record->hold_native=c.separate || (!c.player && (c.sample.order==2 || c.sample.order==3 || c.sample.order==5 || c.sample.order==7 || c.sample.order==9));
     if (placement_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=step unit=%u civ=%u player=%d locomotion=%d order=%d reason=%s attempt=%u wait-ms=%llu path=%.3f from=%.2f,%.2f,%.2f goal=%.2f,%.2f,%.2f old-goal=%.2f,%.2f,%.2f terrain-rejected=%u occupied-rejected=%u",
         ai_time,c.unit->mID,c.sample.owner,c.player,c.unit->mLocomotion,c.sample.order,reason,c.record->attempts,
         waited,path,c.sample.position.x,c.sample.position.y,c.sample.position.z,

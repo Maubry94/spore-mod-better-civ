@@ -38,7 +38,9 @@ inline ReferenceRelocations CodeRelocations(uint32_t reference_address)
     static constexpr uint16_t transit_dispatch[] = {0,4,8,12,16,20};
     static constexpr uint16_t transit_message[] = {0x2e,0x33};
     static constexpr uint16_t transit_arrival[] = {0x262,0x26a,0x2e7,0x370,0x374,0x378,0x37c};
+    static constexpr uint16_t trade_proposal[] = {0x17,0x89,0x178,0x1dc,0x223,0x2fd,0x320,0x41a,0x4de,0x5a8,0x652,0x685};
     switch (reference_address) {
+    case 0xdca090: return {trade_proposal,sizeof trade_proposal/sizeof *trade_proposal};
     case 0xdcc7c0: return {transit_update,sizeof transit_update/sizeof *transit_update};
     case 0xdccd64: return {transit_dispatch,sizeof transit_dispatch/sizeof *transit_dispatch};
     case 0xca73e0: return {transit_message,sizeof transit_message/sizeof *transit_message};
