@@ -24,10 +24,10 @@ inline ReferenceRelocations CodeRelocations(uint32_t reference_address)
         0x37, 0x67, 0xa0, 0xed, 0x174, 0x19b, 0x1a3, 0x1b8, 0x1c2};
     static constexpr uint16_t movement[] = {0x7e, 0x121, 0x13b, 0x1dd, 0x1f8};
     static constexpr uint16_t request[] = {0x1f, 0x34, 0x46, 0xb1, 0xb9, 0xbf, 0xc9};
-    static constexpr uint16_t fleet_sell[] = {0x8e,0x19f};
-    static constexpr uint16_t fleet_refund[] = {0x32,0x89};
-    static constexpr uint16_t fleet_water[] = {0x3e,0x53,0x68};
-    static constexpr uint16_t fleet_continent[] = {0x66,0x6e,0xad,0xdf,0xe7,0x125,0x149,0x151,0x18f};
+    static constexpr uint16_t fleet_sell_offsets[] = {0x8e,0x19f};
+    static constexpr uint16_t fleet_refund_offsets[] = {0x32,0x89};
+    static constexpr uint16_t fleet_water_offsets[] = {0x3e,0x53,0x68};
+    static constexpr uint16_t fleet_continent_offsets[] = {0x66,0x6e,0xad,0xdf,0xe7,0x125,0x149,0x151,0x18f};
     static constexpr uint16_t trade_ac68a0[] = {0x13,0x7d};
     static constexpr uint16_t trade_ac6510[] = {0x31,0x3f,0x49,0x57,0xe1,0x153,0x172,0x1b1,0x1b7,0x1bc,0x1c6,0x1d0,0x216,0x226,0x256,0x25f,0x269,0x273,0x279,0x34b};
     static constexpr uint16_t trade_b3d390[] = {0x1};
@@ -55,10 +55,10 @@ inline ReferenceRelocations CodeRelocations(uint32_t reference_address)
     case 0xb8cfd4: return {trade_b8cfd4,sizeof trade_b8cfd4/sizeof *trade_b8cfd4};
     case 0xb8d570: return {ground_road_publisher,sizeof ground_road_publisher/sizeof *ground_road_publisher};
 
-    case 0xcaa7b0: return {fleet_sell, sizeof fleet_sell/sizeof *fleet_sell};
-    case 0xc9e950: return {fleet_refund, sizeof fleet_refund/sizeof *fleet_refund};
-    case 0xbdb9d0: return {fleet_water, sizeof fleet_water/sizeof *fleet_water};
-    case 0xb886e0: return {fleet_continent, sizeof fleet_continent/sizeof *fleet_continent};
+    case 0xcaa7b0: return {fleet_sell_offsets, sizeof fleet_sell_offsets/sizeof *fleet_sell_offsets};
+    case 0xc9e950: return {fleet_refund_offsets, sizeof fleet_refund_offsets/sizeof *fleet_refund_offsets};
+    case 0xbdb9d0: return {fleet_water_offsets, sizeof fleet_water_offsets/sizeof *fleet_water_offsets};
+    case 0xb886e0: return {fleet_continent_offsets, sizeof fleet_continent_offsets/sizeof *fleet_continent_offsets};
     case 0xca35a0: return {movement, sizeof movement / sizeof *movement};
     case 0xc43fa0: return {request, sizeof request / sizeof *request};
     case 0xbeb710: return {update, sizeof update / sizeof *update};

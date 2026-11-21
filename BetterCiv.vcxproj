@@ -64,9 +64,7 @@
     <ClInclude Include="src\MovementDiagnostics.h" />
     <ClInclude Include="src\MovementObserver.h" />
     <ClInclude Include="src\MovementRecovery.h" />
-    <ClInclude Include="src\MovementRecoveryAdapter.h" />
     <ClInclude Include="src\MovementPlacement.h" />
-    <ClInclude Include="src\MovementPlacementAdapter.h" />
     <ClInclude Include="src\MovementNative.h" />
     <ClInclude Include="src\TradeTransit.h" />
     <ClInclude Include="src\TradeTransitAdapter.h" />

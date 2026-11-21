@@ -12,13 +12,16 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include <Spore/Simulator/SubSystem/GameNounManager.h>
 #include <Spore/Simulator/SubSystem/CommManager.h>
 #include <Spore/Simulator/SubSystem/PlanetModel.h>
-#include <Spore/Simulator/cObstacle.h>
 #include <Spore/Simulator/cCityWalls.h>
 #include <Spore/UTFWin/IButton.h>
 #include <Spore/UTFWin/IWinProc.h>
 #include <Spore/UTFWin/StdDrawable.h>
 #include "CityRules.h"
 #include "Runtime.h"
+#include "SimulationRuntime.h"
+#include "MovementAdapter.h"
+#include "MovementObserver.h"
+#include "FleetAdapter.h"
 #include "VehiclePrices.h"
 #include "OffensivePolicy.h"
 #include "NativePatches.h"
@@ -31,7 +34,6 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include "MovementRecovery.h"
 #include "MovementPlacement.h"
 #include "MovementNative.h"
-#include "FleetPolicy.h"
 #include "FleetNative.h"
 #include "TradeRoutes.h"
 #include "TradeTransit.h"
@@ -40,8 +42,6 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include "PortraitCallAlerts.h"
 
 namespace BetterCiv {
-using Vehicle = Simulator::cVehicle;
-
 static_assert(kMilitary == kVehicleMilitary && kReligious == kVehicleCultural &&
     kEconomic == kVehicleEconomic, "Settings use SDK vehicle-purpose IDs.");
 
@@ -60,19 +60,14 @@ static ModeFunction game_mode;
 typedef float (__thiscall *TradeAcceptance)(Native::TradeTuning*, City* city, Civilization* civilization);
 typedef Civilization* (__thiscall *CityOwner)(City* city);
 typedef int (__thiscall *CivilizationStrategy)(Civilization* civilization);
-typedef int (__thiscall *RelationshipLevel)(void *, uint32_t, uint32_t, int);
 typedef Civilization* (__thiscall *FindPlayerCivilization)(void*);
 
-using CurrentVehicleOrder = const Native::VehicleOrder* (__thiscall*)(Vehicle*);
 using Native::VehicleOrder;
 
 static TradeAcceptance original_trade_acceptance;
 static CityOwner city_owner;
 static CivilizationStrategy civilization_strategy;
-static SimulationContextFunction relationship_manager;
-static RelationshipLevel relationship_level;
 static FindPlayerCivilization find_player_civilization;
-static CurrentVehicleOrder current_vehicle_order;
 static bool portrait_pagination_enabled;
 
 using CivModelWorld = Graphics::IModelWorld* (__cdecl*)();
@@ -159,11 +154,6 @@ member_detour(safe_restore_portrait, Native::RivalPortraitPanel, void(int slot, 
 };
 
 #include "Portraits.h"
-
-static uint32_t political_id(Civilization* entity)
-{
-    return entity->GetPoliticalID();
-}
 
 static uint32_t live_trade_partner_id(const Simulator::cCityPartner& partner)
 {
@@ -258,17 +248,12 @@ static float __cdecl retreat_on_hit(Vehicle* vehicle)
 // Borrowed city/vehicle pointers are never kept across ticks or serialized.
 using ExpansionPlanner = void (__thiscall*)(Civilization*, int);
 static ExpansionPlanner original_expansion_planner;
-using SetVehicleOrder = void (__thiscall*)(Vehicle*, void*, int, int);
-static SetVehicleOrder set_vehicle_order;
-static uint64_t ai_time;
-static bool ai_observer_ready;
 static unsigned ai_log_lines;
 static Conversion::Journal conversion_journal;
 static void observe_conversion();
 static CombatDiagnostics::Journal combat_journal;
 static void observe_combat();
 static Movement::Journal movement_journal;
-static void observe_movement();
 struct AIRecord {
     uint64_t key = 0, last_seen = 0, next_report[2] = {};
     Offensive::State attacks[2];
@@ -280,18 +265,7 @@ struct AIRecord {
 };
 static AIRecord ai_records[32];
 
-static uint64_t object_key(const Simulator::cGameData* object)
-{
-    return object ? (uint64_t(object->mID) << 32) | reinterpret_cast<uintptr_t>(object) : 0;
-}
-
 static bool trade_transit_native_ready;
-static bool trade_detour_phase(Vehicle&);
-static bool (*trade_detour_check)(Vehicle&)=trade_detour_phase;
-#include "MovementRecoveryAdapter.h"
-#include "MovementPlacementAdapter.h"
-#include "MovementRequestAdapter.h"
-#include "FleetAdapter.h"
 #include "TradeRouteAdapter.h"
 #include "TradeTransitAdapter.h"
 #include "HarborDiagnosticsAdapter.h"
@@ -314,9 +288,8 @@ static void reset_ai_observations()
     conversion_journal.ResetSession();
     combat_journal.ResetSession();
     movement_journal.ResetSession();
-    recovery_state.ResetSession();
-    placement_state.ResetSession();
-    fleet_state.ResetSession();
+    reset_movement_session();
+    reset_fleet_session();
     trade_route_state.ResetSession();
     trade_transit_state.ResetSession();
     harbor_next_sample=harbor_route_hash=0;
@@ -363,7 +336,9 @@ public:
         if (combat_journal.SampleDue(settings.ai_diagnostics != 0,
             ai_observer_ready, civ_mode, deltaGameTime, ai_time)) observe_combat();
         if (movement_journal.SampleDue(settings.ai_diagnostics != 0,
-            ai_observer_ready, civ_mode, deltaGameTime, ai_time)) observe_movement();
+            ai_observer_ready, civ_mode, deltaGameTime, ai_time)) {
+            Movement::Observe(movement_journal, portrait_civilizations(), current_vehicle_order, ai_time);
+        }
         recover_blocked_movement(deltaGameTime, civ_mode);
         manage_unused_fleets(deltaGameTime,civ_mode);
         repair_trade_routes(deltaGameTime,civ_mode);
@@ -494,7 +469,6 @@ static void observe_conversion()
 }
 
 #include "CombatObserver.h"
-#include "MovementObserver.h"
 
 static unsigned cancel_city_attack(Civilization* civilization, City* target, int specialty)
 {
@@ -753,7 +727,7 @@ static int install_rules(unsigned char *base)
     original_found_city = (FoundCityFunction)(base + (0xb999f0 - kReferenceBase));
     original_update_conversion = reinterpret_cast<UpdateConversion>(base + (0xbeb710 - kReferenceBase));
     original_expansion_planner = reinterpret_cast<ExpansionPlanner>(base + (0xbfa7a0 - kReferenceBase));
-    set_vehicle_order = reinterpret_cast<SetVehicleOrder>(base + (0xcac1a0 - kReferenceBase));
+    bind_simulation_runtime(base);
     original_turret_limit = (TurretLimitFunction)(base + (0xbd8bf0 - kReferenceBase));
     original_set_specialty = (SetSpecialtyFunction)(base + (0xbe7520 - kReferenceBase));
     original_building_count = (CityCountFunction)(base + (0xbd9d00 - kReferenceBase));
@@ -765,27 +739,18 @@ static int install_rules(unsigned char *base)
     original_trade_acceptance = (TradeAcceptance)(base + (0xceef90 - kReferenceBase));
     city_owner = (CityOwner)(base + (0xbd9d40 - kReferenceBase));
     civilization_strategy = (CivilizationStrategy)(base + (0xbf1080 - kReferenceBase));
-    relationship_manager = (SimulationContextFunction)(base + (0xb3d3c0 - kReferenceBase));
-    relationship_level = (RelationshipLevel)(base + (0xd00bd0 - kReferenceBase));
     find_player_civilization = (FindPlayerCivilization)(base + (0xb25f90 - kReferenceBase));
-    current_vehicle_order = (CurrentVehicleOrder)(base + (0xca7360 - kReferenceBase));
     game_mode = (ModeFunction)(base + (0xb5b910 - kReferenceBase));
     original_civ_model_world = reinterpret_cast<CivModelWorld>(base + (0xb3d620 - kReferenceBase));
 
     WritableBranches writable(sites, count);
     if (writable.Ready()) {
-        recovery_image_base = reinterpret_cast<uintptr_t>(base);
+        bind_movement_native(base);
         trade_transit_native_ready=transit_guard;
         original_draw_routes=sea_display_guard?reinterpret_cast<DrawPlanetRoutes>(base+0xb8c480-kReferenceBase):nullptr;
         original_trade_arrival=reinterpret_cast<TradeArrival>(base+0xc42f80-kReferenceBase);
         trade_update_continue=reinterpret_cast<uintptr_t>(base)+0xdcc7c5-kReferenceBase;
-        recovery_native_ready = Recovery::ValidateNative(base, uint32_t(recovery_image_base)-kReferenceBase);
-        original_local_request=reinterpret_cast<LocalRequestSetter>(base+0xc43fa0-kReferenceBase);
-        placement_terrain_native_ready = Recovery::ValidateTerrain(base, uint32_t(recovery_image_base)-kReferenceBase);
-        fleet_native_ready=Fleet::ValidateNative(base,uint32_t(recovery_image_base)-kReferenceBase);
-        fleet_sell=reinterpret_cast<FleetSell>(base+0xcaa7b0-kReferenceBase);
-        fleet_water=reinterpret_cast<FleetWater>(base+0xbdb9d0-kReferenceBase);
-        fleet_continent=reinterpret_cast<FleetContinent>(base+0xb886e0-kReferenceBase);
+        bind_fleet_native(base);
         trade_route_native_ready=placement_terrain_native_ready && TradeRoutes::ValidateNative(base,uint32_t(recovery_image_base)-kReferenceBase);
         trade_ground_native_ready=trade_route_native_ready && TradeRoutes::ValidateGroundPaint(base,uint32_t(recovery_image_base)-kReferenceBase);
         trade_path_manager=reinterpret_cast<TradePathManager>(base+0xb3d390-kReferenceBase);

@@ -1,5 +1,4 @@
-// Included after the placement/fleet/route adapters. No order, cargo, agreement
-// or native phase is written. The original delivery update remains the owner.
+// The native delivery update owns orders, cargo, agreements and delivery phases.
 static TradeTransit::State trade_transit_state;
 static uintptr_t trade_update_continue;
 static bool trade_detour_phase(Vehicle& unit) {
@@ -9,6 +8,9 @@ static bool trade_detour_phase(Vehicle& unit) {
         return ai_time>=r.phase_seen && ai_time-r.phase_seen<=1500 && TradeTransit::Travelling(r.phase);
     return false;
 }
+
+// Movement recovery consults the latest observed delivery phase before starting a detour.
+bool (*trade_detour_check)(Vehicle&) = trade_detour_phase;
 
 static bool trade_transit_log() {
     return settings.ai_diagnostics && trade_transit_state.lines<4096 && ++trade_transit_state.lines;

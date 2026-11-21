@@ -2,6 +2,8 @@
 // The gameplay modules are compiled separately and linked into both targets.
 #include <Spore/Palettes/PaletteItem.h>
 #include "better-civ.cpp"
+#include "FleetAdapterInternal.h"
+#include "MovementAdapterInternal.h"
 using namespace BetterCiv;
 #include <assert.h>
 #include <crtdbg.h>

@@ -34,11 +34,11 @@ stream is unchanged; the portrait-order cache described below is separate.
 | Conversion | `src/ConversionCapacity.h`, `src/ConversionDiagnostics.h` | `tests/conversion-capacity-tests.h`, `tests/conversion-tests.h` |
 | Diplomacy UI | `src/DiplomacyRoster.cpp`, `src/Portraits.h`, `src/PortraitPages.h`, `src/PortraitPagerUI.h`, `src/PortraitOrder.h`, `src/PortraitCallAlerts.h`, `src/PortraitSpecialties.h` | `tests/portrait*-tests.h`, `tests/pagination-tests.h`, `tests/pager-widget-tests.h` |
 | Offensives | `src/OffensivePolicy.h` and adapters in `src/better-civ.cpp` | `tests/offensive-tests.h` |
-| Movement | `src/MovementPlacement.cpp`, `src/MovementRecovery.h`, `src/MovementRequestAdapter.h` | `tests/simulation-policy-tests.cpp`, `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
-| Fleet retirement | `src/FleetPolicy.cpp`, `src/FleetAdapter.h`, `src/FleetNative.h` | `tests/simulation-policy-tests.cpp`, `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
+| Movement | `src/MovementRecoveryAdapter.cpp`, `src/MovementPlacementAdapter.cpp`, `src/MovementPlacement.cpp`, `src/MovementRecovery.h` | `tests/simulation-policy-tests.cpp`, `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
+| Fleet retirement | `src/FleetPolicy.cpp`, `src/FleetAdapter.cpp`, `src/FleetNative.h` | `tests/simulation-policy-tests.cpp`, `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
 | Trade arrows and painted roads | `src/TradeRoutes.cpp`, `src/GroundTradeRoad.h`, `src/SeaRibbon.h`, `src/TradeTransitAdapter.h` | `tests/trade-route-tests.h`, `tests/sea-ribbon-tests.h` |
 | Trade transit | `src/TradeTransit.h`, `src/TradeTransitAdapter.h`, `src/HarborDiagnosticsAdapter.h` | `tests/trade-transit-tests.h` |
-| Diagnostic observation | `src/CombatDiagnostics.h`, `src/CombatObserver.h`, `src/MovementDiagnostics.h`, `src/MovementObserver.h` | `tests/combat-tests.h`, `tests/movement-tests.h` |
+| Diagnostic observation | `src/CombatDiagnostics.h`, `src/CombatObserver.h`, `src/MovementDiagnostics.h`, `src/MovementObserver.cpp` | `tests/combat-tests.h`, `tests/movement-tests.h` |
 | Installer and runtime settings | `ModInfo.xml`, `src/Settings.cpp`, `src/SettingsChoices.inc`, `tools/package.py` | `tests/settings-tests.cpp`, `tests/test_installers.py` |
 
 ### Adding an installer option

@@ -2,6 +2,7 @@
 #include "BalancedSpecialties.h"
 #include "NativeExtensions.h"
 #include "Settings.h"
+#include "SimulationRuntime.h"
 #include <Spore/ModAPI.h>
 #include <Spore/App/Property.h>
 #include <Spore/App/cArithmeticaResource.h>
@@ -18,7 +19,6 @@ typedef int (__thiscall *TurretLimitFunction)(City* city);
 typedef void (__thiscall *SetSpecialtyFunction)(City* city, int specialty, int updateWalls);
 typedef int (__thiscall *CityCountFunction)(City* city);
 typedef int (__thiscall *FleetCapacityFunction)(Civilization* civilization, int specialty);
-typedef void *(__cdecl *SimulationContextFunction)(void);
 typedef void *(__thiscall *ScenarioSettingsFunction)(void *context);
 typedef int (__thiscall *DifficultyFunction)(void *settings);
 typedef float (__thiscall *ReadScriptFloat)(App::cArithmeticaResource*, const char*);
