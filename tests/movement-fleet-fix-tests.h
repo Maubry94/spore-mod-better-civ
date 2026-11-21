@@ -80,6 +80,32 @@ static void verify_religious_surplus()
     City* target=nullptr;FleetAudit audit;
     assert(fleet_reason(*civ,*units[0],target,&audit)==Fleet::Reason::LandSurplus && target==cities[3]);
     assert(audit.facts.local_ground==26 && audit.facts.local_cities==3 && audit.facts.sea_units==4);
+    // Mathy: a hostile fleet is still offshore after the city changes hands.
+    // An empty native hostile list alone must not authorize either seller.
+    alignas(8) unsigned char ship_bytes[sizeof(Vehicle)]={};
+    auto* ship=reinterpret_cast<Vehicle*>(ship_bytes);
+    ship->mHealthPoints=100;ship->mLocomotion=kVehicleWater;ship->mPosition={30,0,500};
+    Vehicle* fleet[]={ship};
+    put_pointer(enemy,kCivVehiclesBegin,fleet);put_pointer(enemy,kCivVehiclesEnd,fleet+1);
+    auto* ground=units[0];
+    const auto old_mode=game_mode; const auto old_stage=current_mode;
+    game_mode=mock_mode; current_mode=kCivilizationMode;
+    for (int order : {1,2,3,7}) {
+        combat_fixture_order.kind=order;
+        guarded_ai_land_sale(ground,0,true);
+        assert(!fleet_mock_sales && !ground->mbDead);
+    }
+    assert(fleet_reason(*civ,*ground,target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::Busy);
+    ship->mPosition={400,0,500};
+    ground->mTimeSinceLastWeaponFireMS=100;
+    guarded_ai_land_sale(ground,0,true);
+    assert(!fleet_mock_sales);
+    ground->mTimeSinceLastWeaponFireMS=60000;
+    combat_fixture_order={};
+    guarded_ai_land_sale(ground,0,true);
+    assert(fleet_mock_sales==1 && ground->mbDead);
+    ground->mbDead=false;fleet_mock_sales=0;game_mode=old_mode;current_mode=old_stage;
+    put_pointer(enemy,kCivVehiclesBegin,nullptr);put_pointer(enemy,kCivVehiclesEnd,nullptr);
     // Defender cannot build ships, but its port can still be attacked. Native
     // planner may have no target while reallocating: opportunity stays valid.
     for(unsigned t=0;t<=178000;t+=2000){ai_time=t;manage_unused_fleets(2000,true);}

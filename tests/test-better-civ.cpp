@@ -720,6 +720,7 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
     settings.ai_diagnostics = (ai_options >> 1) & 1;
     settings.stalled_seconds = (ai_options & 4) ? 180 : 0;
     settings.retry_blocked_paths=variant==1?2:0;
+    settings.rebalance_land=variant==1;
     auto* request_site=image+0xc9ea20-kReferenceBase;
     unsigned char request_original[5];memcpy(request_original,request_site,5);
     auto* transit_site=image+0xdcc7c0-kReferenceBase;
@@ -883,6 +884,13 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
             assert(site[0] == 0xe8 && reinterpret_cast<uintptr_t>(site) + 5 + address ==
                    reinterpret_cast<uintptr_t>(configured_palette_int));
         }
+    }
+    {
+        const auto* site=image+0xbf75d2-kReferenceBase;
+        uint32_t relative; memcpy(&relative,site+1,4);
+        const auto target = settings.rebalance_land ? reinterpret_cast<uintptr_t>(guarded_ai_land_sale)
+            : reinterpret_cast<uintptr_t>(image+0xcaa7b0-kReferenceBase);
+        assert(site[0]==0xe8 && reinterpret_cast<uintptr_t>(site)+5+relative==target);
     }
     for(const auto hook: {std::pair<uint32_t,uintptr_t>{0xdca0b0,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},
         {0xdcc7f1,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},

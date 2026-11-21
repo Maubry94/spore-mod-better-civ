@@ -1,6 +1,11 @@
 #pragma once
 #include "ReferenceCode.h"
 namespace BetterCiv::Fleet {
+inline bool MatchNativeSaleCaller(const unsigned char* base) {
+    uint32_t hash;
+    return base && Native::HashReferenceCode(base + (0xbf74d0 - 0x400000), 271, 0, {}, hash)
+        && hash == 0xfe043e9b;
+}
 inline bool ValidateNative(const unsigned char* base,uint32_t delta) {
     if (!base) return false;
     const struct {uint32_t address,size,hash;} guards[]={

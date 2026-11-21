@@ -1071,6 +1071,9 @@ static int install_rules(unsigned char *base)
     const bool request_guard=Recovery::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     const bool transit_guard=TradeTransit::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     BranchSite sites[] = {
+        {0xbf75d2,{0xe8,0xd9,0x31,0x0b,0x00},(uintptr_t)guarded_ai_land_sale,NULL,0,
+            settings.rebalance_land && Fleet::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase) &&
+            Fleet::MatchNativeSaleCaller(base)},
         {0xdca6b9,{0xe8,0xc2,0x88,0xe7,0xff},(uintptr_t)trade_proposal_arrival,NULL,0,transit_guard && settings.retry_blocked_paths==2},
         {0xdca0b0,{0xe8,0xab,0xd2,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},
         {0xdcc7f1,{0xe8,0x6a,0xab,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},

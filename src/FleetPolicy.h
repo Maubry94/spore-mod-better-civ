@@ -43,7 +43,7 @@ struct Record {
 };
 struct State {
     Record units[512];
-    struct Nation {uint64_t key=0,next_sale=0,next_review=0;} nations[32];
+    struct Nation {uint64_t key=0,next_sale=0,next_review=0,next_veto_log=0;} nations[32];
     uint64_t next_sample=0;
     unsigned lines=0;
     void ResetSession() { for (auto& r:units) r={}; for(auto& n:nations)n={}; next_sample=0; }

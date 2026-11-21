@@ -27,6 +27,7 @@ their defaults are copied unchanged to the public installer.
 
 ## What Better AI does
 
+- Defers the native AI's land-vehicle sale while the unit has a target, detects hostiles, has fired in the last 30 seconds, or has an enemy vehicle within either unit's weapon range (at least 85 world units). The same proximity check applies to optional surplus land and portless ship sales.
 - Reconsiders a target after 2-4 failed waves, subject to native eligibility and an available alternative.
 - Cancels identified city-attack orders after 3 simulated minutes without a new maximum of the conquest/conversion gauge. Observation starts near the city with at least three assigned attackers. A 2-minute cooldown prevents immediately retrying that city. Forced diplomatic targets are excluded; survivors can still fight locally.
 - Tries bounded nearby detours for blocked approaches and quiet loops. Explicit new orders take priority. A separate deep-overlap check can separate firing or moving friendly units, for player and AI. An actually idle player unit can yield space; player fleets are never sold by these rules. Some jams and circling remain unresolved.

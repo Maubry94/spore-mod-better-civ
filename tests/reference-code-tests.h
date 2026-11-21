@@ -2,6 +2,7 @@
 
 struct RelocatedGuard { uint32_t address, size, hash; };
 static constexpr RelocatedGuard relocated_guards[] = {
+    {0xbf74d0,271,0xfe043e9b},
     {0xbdb350,128,0xf30f9e7c},
     {0xdca090,1697,0x8225c49b},
         {0xcaa7b0,741,0x99723fdf},

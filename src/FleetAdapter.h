@@ -30,6 +30,48 @@ static bool fleet_hostile(Civilization& a,Civilization& b) {
     return relation>=0 && relation<=1;
 }
 static bool (*fleet_are_enemies)(Civilization&,Civilization&)=fleet_hostile;
+static bool fleet_in_combat(const Vehicle& unit) {
+    return unit.mpTarget || !unit.mHostileUnits.empty() || unit.mTimeSinceLastWeaponFireMS < 30000;
+}
+
+static bool fleet_enemy_in_reach(Civilization& owner, const Vehicle& unit) {
+    const float own_range = unit.mpWeapon ? unit.mpWeapon->GetMaxRange() : 0.0f;
+    for (const auto& other : portrait_civilizations()) {
+        if (!other || other.get() == &owner || other->mbIsDestroyed || !fleet_are_enemies(owner, *other)) continue;
+        for (const auto& enemy : other->mVehicles) {
+            if (!enemy || enemy->mbDead || enemy->mbIsDestroyed || enemy->mbIsGhost || enemy->mHealthPoints <= 0) continue;
+            const float enemy_range = enemy->mpWeapon ? enemy->mpWeapon->GetMaxRange() : 0.0f;
+            // Keep a local buffer even when a unit has no weapon data yet.
+            const float reach = (std::max)(85.0f, (std::max)(own_range, enemy_range));
+            if (Recovery::Distance(unit.mPosition, enemy->mPosition) <= reach) return true;
+        }
+    }
+    return false;
+}
+
+// Only the AI's land-vehicle retirement call. The native caller returns
+// immediately afterwards, so vetoing the transaction leaves ownership intact.
+static void __fastcall guarded_ai_land_sale(Vehicle* unit, int, bool refund) {
+    if (unit && refund && settings.rebalance_land && ai_observer_ready && in_civilization()) {
+        for (const auto& civ : portrait_civilizations()) {
+            if (!civ || civ->mbIsDestroyed || civ->mIsPlayerOwned || civ->mCities.empty()) continue;
+            auto owned = std::find_if(civ->mVehicles.begin(), civ->mVehicles.end(),
+                [unit](const cVehiclePtr& v) { return v.get() == unit; });
+            if (owned == civ->mVehicles.end()) continue;
+            const bool blocked = fleet_in_combat(*unit) || fleet_enemy_in_reach(*civ, *unit);
+            auto* nation = settings.ai_diagnostics ? fleet_state.FindNation(object_key(civ.get())) : nullptr;
+            if (nation && fleet_state.lines < 4096 && (!blocked || ai_time >= nation->next_veto_log)) {
+                if (blocked) nation->next_veto_log = ai_time + 5000;
+                ++fleet_state.lines;
+                ModAPI::Log("[Better Civ Fleet] t=%llu event=%s civ=%u unit=%u source=native-ai",
+                    ai_time, blocked ? "sale-veto" : "sale-allowed", civ->mID, unit->mID);
+            }
+            if (blocked) return;
+            break;
+        }
+    }
+    fleet_sell(unit, refund);
+}
 // Find an enemy port on the ship's own connected sea. Geography is checked
 // without requiring a builder city, since the nation just lost its ports.
 static bool fleet_reclaim_target(Civilization& civ,Vehicle& unit,City*& target) {
@@ -59,7 +101,7 @@ static Fleet::Reason fleet_reason(Civilization& civ,Vehicle& u,City*& target,Fle
     f.player=civ.mIsPlayerOwned; f.alive=!civ.mbIsDestroyed && !civ.mCities.empty() && fleet_live(&u);
     if (!f.alive || f.player)return finish(F::Veto::PlayerOrInvalid);
     const auto* order=current_vehicle_order(&u);
-    f.safe=!u.mpTarget && u.mHostileUnits.empty() && u.mTimeSinceLastWeaponFireMS>=30000;
+    f.safe=!fleet_in_combat(u);
     f.idle=order && (order->kind==0 || (order->kind==7 && u.mPurpose!=kVehicleEconomic)) &&
         Recovery::Finite(u.mVelocity) && Recovery::Distance(u.mVelocity,{})<0.5f &&
         std::isfinite(u.mDesiredSpeed) && u.mDesiredSpeed<=0.1f;
@@ -79,6 +121,7 @@ static Fleet::Reason fleet_reason(Civilization& civ,Vehicle& u,City*& target,Fle
             if(!fleet_reclaim_target(civ,u,target))return finish(F::Veto::MapUnavailable);
             if(target)return finish(F::Veto::Eligible,F::Reason::ReclaimPort);
         }
+        if (f.no_port && fleet_enemy_in_reach(civ, u)) return finish(F::Veto::Busy);
         return finish(f.no_port?F::Veto::Eligible:F::Veto::NotCandidate,F::Choose(f,true,false));
     }
     if (!settings.rebalance_land || !f.combat_land)return finish(F::Veto::NotCandidate);
@@ -128,6 +171,7 @@ static Fleet::Reason fleet_reason(Civilization& civ,Vehicle& u,City*& target,Fle
     if(!f.sea_target)return finish(F::Veto::NoEnemyPort);
     if(f.sea_units>=6)return finish(F::Veto::EnoughShips);
     if(f.local_ground<=(f.local_cities>1?f.local_cities*6:6))return finish(F::Veto::Garrison);
+    if (fleet_enemy_in_reach(civ, u)) return finish(F::Veto::Busy);
     return finish(F::Veto::Eligible,F::Choose(f,false,true));
 }
 static void manage_unused_fleets(int delta,bool civ_mode) {
