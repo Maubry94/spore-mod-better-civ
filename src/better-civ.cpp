@@ -2,13 +2,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include <wchar.h>
 #include <Spore/ModAPI.h>
-#include <Spore/App/Property.h>
-#include <Spore/App/PropertyList.h>
-#include <Spore/Palettes/PaletteItem.h>
-#include <Spore/App/cArithmeticaResource.h>
 #include <Spore/Simulator/cCulturalTarget.h>
+#include <Spore/Simulator/cCommodityNode.h>
 #include <Spore/Simulator/SubSystem/cStrategy.h>
 #include <Spore/Simulator/SubSystem/SimulatorSystem.h>
 // The SDK's GetData template uses an unqualified intrusive_ptr internally.
@@ -21,10 +17,11 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include <Spore/UTFWin/IButton.h>
 #include <Spore/UTFWin/IWinProc.h>
 #include <Spore/UTFWin/StdDrawable.h>
-#include "Settings.h"
-#include "BalancedSpecialties.h"
+#include "CityRules.h"
+#include "Runtime.h"
+#include "VehiclePrices.h"
 #include "OffensivePolicy.h"
-#include "NativeExtensions.h"
+#include "NativePatches.h"
 #include "BetterCiv.h"
 #include "ConversionDiagnostics.h"
 #include "CombatDiagnostics.h"
@@ -36,59 +33,30 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include "MovementNative.h"
 #include "FleetPolicy.h"
 #include "FleetNative.h"
-#include "TradeRouteGeometry.h"
-#include "TradeRouteNative.h"
+#include "TradeRoutes.h"
 #include "TradeTransit.h"
+#include "SeaRibbon.h"
+#include "PortraitPages.h"
+#include "PortraitCallAlerts.h"
 
 namespace BetterCiv {
-using City = Simulator::cCity;
-using Civilization = Simulator::cCivilization;
 using Vehicle = Simulator::cVehicle;
 
 static_assert(kMilitary == kVehicleMilitary && kReligious == kVehicleCultural &&
     kEconomic == kVehicleEconomic, "Settings use SDK vehicle-purpose IDs.");
 
 enum {
-    kReferenceBase = 0x400000,
-    kReferenceTimestamp = 1727737552,
-    kReferenceImageSize = 26271744,
-    kSteamOctober2024ImageSize = 26443776,
     kCivilizationMode = 0x01654c04,
-    kTurretSlotSize = 0x18,
-    kMilitaryLargeTurretCapacity = 8,
-    kNativeFleetLimit = 36,
     kRelationshipNeutral = 2,
     kTradeDeliveryOrder = 5,
     kCreateTradeRouteOrder = 9,
     kCivEconomicStrategy = 1,
-    kVehicleRetreatCondition = 0xdc47e0,
 };
 
 typedef uint32_t (__cdecl *ModeFunction)(void);
-typedef City* (__cdecl *FoundCityFunction)(Native::CityFoundation* site);
-typedef int (__thiscall *TurretLimitFunction)(City* city);
-typedef void (__thiscall *SetSpecialtyFunction)(City* city, int specialty, int updateWalls);
 
 static ModeFunction game_mode;
-static FoundCityFunction original_found_city;
-static TurretLimitFunction original_turret_limit;
-static SetSpecialtyFunction original_set_specialty;
-typedef int (__thiscall *CityCountFunction)(City* city);
-typedef int (__thiscall *FleetCapacityFunction)(Civilization* civilization, int specialty);
-typedef void *(__cdecl *SimulationContextFunction)(void);
-typedef void *(__thiscall *ScenarioSettingsFunction)(void *context);
-typedef int (__thiscall *DifficultyFunction)(void *settings);
 
-static CityCountFunction original_building_count;
-static CityCountFunction allowed_turret_count;
-static FleetCapacityFunction original_fleet_capacity;
-static SimulationContextFunction simulation_context;
-static ScenarioSettingsFunction scenario_settings;
-static DifficultyFunction game_difficulty;
-
-typedef float (__thiscall *ReadScriptFloat)(App::cArithmeticaResource*, const char*);
-typedef const float *(__thiscall *ReadFloatProperty)(App::Property*);
-typedef unsigned (__thiscall *RandomBelow)(void *, unsigned);
 typedef float (__thiscall *TradeAcceptance)(Native::TradeTuning*, City* city, Civilization* civilization);
 typedef Civilization* (__thiscall *CityOwner)(City* city);
 typedef int (__thiscall *CivilizationStrategy)(Civilization* civilization);
@@ -98,15 +66,6 @@ typedef Civilization* (__thiscall *FindPlayerCivilization)(void*);
 using CurrentVehicleOrder = const Native::VehicleOrder* (__thiscall*)(Vehicle*);
 using Native::VehicleOrder;
 
-static Settings settings = {
-    100, 100, 8, 15, 15, 4000, 4000, kAllSpecialties, 0, TURRETS_VANILLA, 1, 1, 0, 0, 0,
-};
-static BalancedSpecialties starting_specialties;
-static HINSTANCE mod_instance;
-static ReadScriptFloat read_script_float;
-static ReadFloatProperty read_float_property;
-static RandomBelow random_below;
-static void *simulation_random;
 static TradeAcceptance original_trade_acceptance;
 static CityOwner city_owner;
 static CivilizationStrategy civilization_strategy;
@@ -114,14 +73,7 @@ static SimulationContextFunction relationship_manager;
 static RelationshipLevel relationship_level;
 static FindPlayerCivilization find_player_civilization;
 static CurrentVehicleOrder current_vehicle_order;
-using RegisterPortrait = void (__thiscall*)(Native::RivalPortraitPanel*, Civilization*);
-using RestorePortrait = void (__thiscall*)(Native::RivalPortraitPanel*, int, Civilization*);
-using ReadLocalizedText = const char16_t* (__thiscall*)(LocalizedString*);
-static RegisterPortrait original_register_portrait;
-static RestorePortrait original_restore_portrait;
-static ReadLocalizedText read_localized_text;
 static bool portrait_pagination_enabled;
-static bool pager_owns_panel(const Native::RivalPortraitPanel* panel);
 
 using CivModelWorld = Graphics::IModelWorld* (__cdecl*)();
 static CivModelWorld original_civ_model_world;
@@ -133,49 +85,9 @@ static Graphics::IModelWorld* __cdecl rechecked_civ_model_world()
     return world;
 }
 
-static void load_options(void)
-{
-    wchar_t path[MAX_PATH];
-    DWORD length = GetModuleFileNameW(mod_instance, path, MAX_PATH);
-    if (!length || length >= MAX_PATH)
-        return;
-    wchar_t *file_separator = wcsrchr(path, L'\\');
-    if (!file_separator)
-        return;
-    *file_separator = L'\0';
-    wchar_t *parent_separator = wcsrchr(path, L'\\');
-    if (parent_separator && _wcsicmp(parent_separator + 1, L"mLibs") == 0)
-        *parent_separator = L'\0';
-    const wchar_t suffix[] = L"\\ModSettings\\BetterCiv";
-    if (wcslen(path) + sizeof suffix / sizeof *suffix > MAX_PATH)
-        return;
-    wcscat(path, suffix);
-    FILE *file = _wfopen(path, L"rb");
-    if (!file)
-        return;
-    char line[128];
-    int first = 1;
-    OptionReader options(&settings);
-    while (fgets(line, sizeof line, file)) {
-        char *start = line;
-        if (first && strncmp(start, "\xef\xbb\xbf", 3) == 0)
-            start += 3;
-        first = 0;
-        char *end = strpbrk(start, "\r\n");
-        if (!end && !feof(file)) {
-            int byte;
-            while ((byte = fgetc(file)) != '\n' && byte != EOF) {}
-            continue;
-        }
-        if (end)
-            *end = '\0';
-        options.consume(start);
-    }
-    options.finish();
-    fclose(file);
-}
+Settings settings = kPublicDefaults;
 
-static int in_civilization(void)
+bool in_civilization()
 {
     return game_mode() == kCivilizationMode;
 }
@@ -196,114 +108,6 @@ member_detour(initialized_city_conversion, City, void()) {
     }
 };
 
-member_detour(configured_price, App::Property, const float *()) {
-    const float* detoured()
-    {
-        auto* property = this;
-        const float *vanilla = read_float_property(property);
-        static thread_local float value;
-        if (!vanilla || settings.cost_percent == 100 || !in_civilization())
-            return vanilla;
-        value = *vanilla * (float)settings.cost_percent / 100.0f;
-        return &value;
-    }
-};
-
-// The planner and tooltips read paletteItemCost, not cCivilization's float
-// vehicle cost. Keep both paths on the same multiplier without editing the
-// shared property list (which can also be used outside Civilization).
-static constexpr uint32_t kPaletteItemCost = 0x02166464;
-static constexpr uint32_t kPaletteItemType = 0x02196ad5;
-
-static bool is_discounted_vehicle_item(const App::PropertyList* list, uint32_t property_id)
-{
-    if (property_id != kPaletteItemCost || settings.cost_percent == 100 || !in_civilization())
-        return false;
-    uint32_t type = 0;
-    return App::Property::GetKeyInstanceID(list, kPaletteItemType, type) &&
-        type == Palettes::PaletteItem::kItemCityVehicle;
-}
-
-static int32_t palette_vehicle_price(int32_t native)
-{
-    // Zero/negative values are UI sentinels; the offered percentages are <= 100.
-    return native > 0 ? static_cast<int32_t>(static_cast<int64_t>(native) * settings.cost_percent / 100)
-                      : native;
-}
-
-member_detour(configured_palette_cost, App::PropertyList, bool(uint32_t property_id, App::Property*& result)) {
-    bool detoured(uint32_t property_id, App::Property*& result)
-    {
-        const bool found = this->GetProperty(property_id, result);
-        if (found && result && result->mnType == App::PropertyType::Int32 &&
-            is_discounted_vehicle_item(this, property_id)) {
-            // Each checked caller consumes the scalar immediately. Never give
-            // the engine a stack pointer or modify the original property.
-            static thread_local App::Property adjusted;
-            adjusted.SetValueInt32(palette_vehicle_price(*result->GetValueInt32()));
-            result = &adjusted;
-        }
-        return found;
-    }
-};
-
-static bool __cdecl configured_palette_int(const App::PropertyList* list, uint32_t property_id, int32_t& result)
-{
-    const bool found = App::Property::GetInt32(list, property_id, result);
-    if (found && is_discounted_vehicle_item(list, property_id))
-        result = palette_vehicle_price(result);
-    return found;
-}
-
-static const char16_t* discount_hover_text(const char16_t* native, char16_t (&buffer)[512])
-{
-    if (!native || settings.cost_percent == 100 || !in_civilization()) return native;
-    size_t length = 0;
-    while (length < 512 && native[length]) ++length;
-    if (length == 512) return native;
-    size_t begin = 0;
-    while (begin < length && (native[begin] < u'0' || native[begin] > u'9')) ++begin;
-    if (begin == length) return native;
-    size_t end = begin;
-    int64_t price = 0;
-    char16_t separator = 0;
-    while (end < length) {
-        const char16_t ch = native[end];
-        if (ch >= u'0' && ch <= u'9') {
-            price = price * 10 + ch - u'0';
-            if (price > INT32_MAX) return native;
-        } else if ((ch == u' ' || ch == u'\u00a0' || ch == u'\u202f' || ch == u',' || ch == u'.' || ch == u'\'') &&
-                   end + 1 < length && native[end + 1] >= u'0' && native[end + 1] <= u'9') {
-            separator = ch;
-        } else break;
-        ++end;
-    }
-    int32_t discounted = palette_vehicle_price(static_cast<int32_t>(price));
-    char16_t reverse[24];
-    size_t digits = 0, count = 0;
-    do {
-        if (separator && digits && digits % 3 == 0) reverse[count++] = separator;
-        reverse[count++] = static_cast<char16_t>(u'0' + discounted % 10);
-        discounted /= 10;
-        ++digits;
-    } while (discounted);
-    if (begin + count + length - end >= 512) return native;
-    memcpy(buffer, native, begin * sizeof(char16_t));
-    for (size_t i = 0; i < count; ++i) buffer[begin + i] = reverse[count - i - 1];
-    memcpy(buffer + begin + count, native + end, (length - end + 1) * sizeof(char16_t));
-    return buffer;
-}
-
-// The three world-view purchase buttons use localized text with a literal
-// vanilla price. These exact GetText calls are separate from paletteItemCost.
-member_detour(configured_hover_text, LocalizedString, const char16_t*()) {
-    const char16_t* detoured()
-    {
-        static thread_local char16_t buffer[512];
-        return discount_hover_text(read_localized_text(this), buffer);
-    }
-};
-
 static int available_portrait(const Native::RivalPortraitPanel* panel, const Civilization* civilization)
 {
     int free_slot = -1;
@@ -315,7 +119,6 @@ static int available_portrait(const Native::RivalPortraitPanel* panel, const Civ
     return free_slot;
 }
 
-static void note_portrait_qualification(const Civilization*);
 member_detour(safe_register_portrait, Native::RivalPortraitPanel, void(Civilization* civilization)) {
     void detoured(Civilization* civilization)
     {
@@ -356,199 +159,6 @@ member_detour(safe_restore_portrait, Native::RivalPortraitPanel, void(int slot, 
 };
 
 #include "Portraits.h"
-
-member_detour(configured_firing_interval, App::Property, const float *()) {
-    const float* detoured()
-    {
-        auto* property = this;
-        const float *vanilla = read_float_property(property);
-        static thread_local float value;
-        if (!vanilla || settings.firing_interval_percent == 100 || !in_civilization())
-            return vanilla;
-        value = *vanilla * (float)settings.firing_interval_percent / 100.0f;
-        return &value;
-    }
-};
-
-static int custom_population(void)
-{
-    return settings.population_min != 15 || settings.population_max != 15;
-}
-
-static int custom_wealth(void)
-{
-    return settings.wealth_min != 4000 || settings.wealth_max != 4000;
-}
-
-member_detour(configured_civ_generation, App::cArithmeticaResource, float(const char *name)) {
-    float detoured(const char *name)
-    {
-        auto* script = this;
-        if (custom_population()) {
-            if (strcmp(name, "population_min") == 0) return (float)settings.population_min;
-            if (strcmp(name, "population_max") == 0) return (float)settings.population_max;
-        }
-        if (custom_wealth()) {
-            if (strcmp(name, "wealth_min") == 0) return (float)settings.wealth_min;
-            if (strcmp(name, "wealth_max") == 0) return (float)settings.wealth_max;
-        }
-        return read_script_float(script, name);
-    }
-};
-
-member_detour(configured_starting_vehicles, App::cArithmeticaResource, float(const char *name)) {
-    float detoured(const char *name)
-    {
-        auto* script = this;
-        if (strcmp(name, "num_offensive_vehicles") == 0) return (float)settings.offensive_vehicles;
-        return read_script_float(script, name);
-    }
-};
-
-static int civilization_difficulty(void)
-{
-    if (!in_civilization())
-        return -1;
-    void *context = simulation_context();
-    void *scenario = context ? scenario_settings(context) : NULL;
-    return scenario ? game_difficulty(scenario) : -1;
-}
-
-static int fleet_capacity_with_defenses(int capacity, TurretMode mode, int difficulty)
-{
-    // Ratios use the sum of the three large-city turret targets before the AI's budget checks.
-    int vanilla = 13;
-    int configured = 18;
-    if (mode == TURRETS_ALL_SPECIALTIES) {
-        switch (difficulty) {
-            case kDifficultyEasy:   vanilla = 6; configured = 9; break;
-            case kDifficultyMedium: vanilla = 9; configured = 12; break;
-            case kDifficultyHard:   configured = 24; break;
-            default: return capacity;
-        }
-    } else if (mode != TURRETS_HARD_MAXIMUM || difficulty != kDifficultyHard) {
-        return capacity;
-    }
-    if (capacity <= 0 || capacity >= kNativeFleetLimit)
-        return capacity;
-    int adjusted = (capacity * configured + vanilla / 2) / vanilla;
-    return adjusted < kNativeFleetLimit ? adjusted : kNativeFleetLimit;
-}
-
-member_detour(configured_fleet_capacity, Civilization, int(int specialty)) {
-    int detoured(int specialty)
-    {
-        auto* civilization = this;
-        int native = original_fleet_capacity(civilization, specialty);
-        if (specialty < kMilitary || specialty > kEconomic)
-            return native;
-        return fleet_capacity_with_defenses(native, settings.turrets, civilization_difficulty());
-    }
-};
-
-member_detour(defensive_building_count, City, int()) {
-    int detoured()
-    {
-        auto* city = this;
-        if (civilization_difficulty() == kDifficultyHard) {
-            // The AI uses (count + 1) / 2 for this independent construction target.
-            int capacity = allowed_turret_count(city);
-            if (capacity > 0 && capacity <= kMilitaryLargeTurretCapacity)
-                return capacity * 2 - 1;
-        }
-        return original_building_count(city);
-    }
-};
-
-static int capacity_in_layout(uintptr_t begin, uintptr_t end, int original_limit)
-{
-    if (!begin || end < begin || (end - begin) % kTurretSlotSize)
-        return original_limit;
-
-    uintptr_t slots = (end - begin) / kTurretSlotSize;
-    if (slots <= (uintptr_t)original_limit)
-        return original_limit;
-    return slots < kMilitaryLargeTurretCapacity ? (int)slots : kMilitaryLargeTurretCapacity;
-}
-
-static City* __cdecl found_major_city(Native::CityFoundation* site)
-{
-    // The guarded native founder passes false as Initialize's player flag.
-    // The player's city and save restoration do not use this rival call site.
-    int reserved_specialty = -1;
-    const int old_specialty = site ? site->specialty : -1;
-    if (site && in_civilization()) {
-        site->minorNation = false;
-        if (settings.balanced_specialties) {
-            const unsigned remaining = starting_specialties.Remaining();
-            if (remaining) {
-                const unsigned ticket = remaining == 1 ? 0 : random_below(simulation_random, remaining);
-                reserved_specialty = starting_specialties.Take(ticket);
-                if (reserved_specialty >= 0)
-                    site->specialty = Native::FoundationSpecialtyForVehiclePurpose(reserved_specialty);
-            }
-        } else if (settings.specialty_mask != kAllSpecialties) {
-            int candidates[3];
-            unsigned count = 0;
-            for (int specialty = kMilitary; specialty <= kEconomic; ++specialty) {
-                if (settings.specialty_mask & (1u << specialty))
-                    candidates[count++] = specialty;
-            }
-            if (count) {
-                unsigned index = count == 1 ? 0 : random_below(simulation_random, count);
-                site->specialty = Native::FoundationSpecialtyForVehiclePurpose(candidates[index]);
-            }
-        }
-    }
-    City* city = original_found_city(site);
-    if (reserved_specialty >= 0) {
-        if (!city) {
-            starting_specialties.Return(reserved_specialty);
-            site->specialty = old_specialty;
-        } else if (settings.ai_diagnostics) {
-            ModAPI::Log("[Better Civ Start] balanced rival=%u specialty=%d (0=military 1=religious 2=economic).",
-                9u - starting_specialties.Remaining(), reserved_specialty);
-        }
-    }
-    return city;
-}
-
-member_detour(extended_turret_limit, City, int()) {
-    int detoured()
-    {
-        auto* city = this;
-        int limit = original_turret_limit(city);
-        if (!in_civilization() || limit <= 0)
-            return limit;
-
-        const auto& slots = city->mTurretsLayout.mSlots;
-        const auto begin = reinterpret_cast<uintptr_t>(slots.begin());
-        const auto end = reinterpret_cast<uintptr_t>(slots.end());
-        return capacity_in_layout(begin, end, limit);
-    }
-};
-
-member_detour(defensive_capacity_target, City, int()) {
-    int detoured()
-    {
-        auto* city = this;
-        int capacity = allowed_turret_count(city);
-        // The Hard branch takes floor(4 * target / 5) before checking its remaining budget.
-        if (capacity > 0 && capacity <= kMilitaryLargeTurretCapacity &&
-            civilization_difficulty() == kDifficultyHard)
-            return (capacity * 5 + 3) / 4;
-        return capacity;
-    }
-};
-
-member_detour(retain_rival_city_specialty, City, void(int specialty, int update_walls)) {
-    void detoured(int specialty, int update_walls)
-    {
-        auto* city = this;
-        if (game_mode() != kCivilizationMode || city->mbIsPlayerCity)
-            original_set_specialty(city, specialty, update_walls);
-    }
-};
 
 static uint32_t political_id(Civilization* entity)
 {
@@ -685,6 +295,7 @@ static bool (*trade_detour_check)(Vehicle&)=trade_detour_phase;
 #include "TradeRouteAdapter.h"
 #include "TradeTransitAdapter.h"
 #include "HarborDiagnosticsAdapter.h"
+#include "SpiceOwnershipAdapter.h"
 
 static bool ai_log_allowed()
 {
@@ -709,6 +320,9 @@ static void reset_ai_observations()
     trade_route_state.ResetSession();
     trade_transit_state.ResetSession();
     harbor_next_sample=harbor_route_hash=0;
+    sea_display_hash=next_sea_display_scan=0;
+    sea_ribbon_cache.Reset();
+    spice_ownership.Reset();
     reset_portrait_history();
     reset_portrait_call_alerts();
     reset_portrait_specialties();
@@ -753,7 +367,9 @@ public:
         recover_blocked_movement(deltaGameTime, civ_mode);
         manage_unused_fleets(deltaGameTime,civ_mode);
         repair_trade_routes(deltaGameTime,civ_mode);
+        update_sea_display(deltaGameTime,civ_mode);
         observe_harbors(deltaGameTime,civ_mode);
+        repair_orphan_spice_nodes(deltaGameTime,civ_mode);
     }
 };
 static AIObservationLifecycle ai_lifecycle;
@@ -1024,53 +640,31 @@ member_detour(observed_expansion_planner, Civilization, void(int specialty)) {
     }
 };
 
-struct BranchSite {
-    uintptr_t site;
-    unsigned char expected[5];
-    uintptr_t replacement;
-    unsigned char *location;
-    DWORD protection;
-    int enabled;
-    // Zero: relative call/jump. Otherwise: opcode for mov eax/edx, imm32.
-    unsigned char load_target_opcode = 0;
-};
-
-static void write_branch(BranchSite *site)
-{
-    if (site->load_target_opcode) {
-        const uint32_t address = static_cast<uint32_t>(site->replacement);
-        memcpy(site->location + 1, &address, sizeof address);
-        site->location[0] = site->load_target_opcode;
-        return;
-    }
-    uint32_t displacement = (uint32_t)(site->replacement - (uintptr_t)site->location - 5);
-    memcpy(site->location + 1, &displacement, sizeof displacement);
-    // Use a tail jump for the predicate entry, keeping its cdecl caller and float result.
-    if (site->site == kVehicleRetreatCondition || site->site == 0xc9ea20 || site->site == 0xdcc7c0)
-        site->location[0] = 0xe9;
-}
-
 // These call sites are intentionally kept narrow. A function-wide Detours hook
 // would affect additional callers and change v1.0 behavior (notably captures).
 static int install_rules(unsigned char *base)
 {
-    IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base;
-    if (!dos || dos->e_magic != IMAGE_DOS_SIGNATURE)
-        return 0;
-
-    IMAGE_NT_HEADERS32 *headers = (IMAGE_NT_HEADERS32 *)(base + dos->e_lfanew);
-    if (headers->Signature != IMAGE_NT_SIGNATURE ||
-        headers->FileHeader.Machine != IMAGE_FILE_MACHINE_I386 ||
-        headers->FileHeader.TimeDateStamp != kReferenceTimestamp ||
-        (headers->OptionalHeader.SizeOfImage != kReferenceImageSize &&
-         headers->OptionalHeader.SizeOfImage != kSteamOctober2024ImageSize))
+    if (!supported_executable(base))
         return 0;
 
     const int adjust_defenses = settings.turrets != TURRETS_VANILLA;
     const int extend_layout = settings.turrets == TURRETS_ALL_SPECIALTIES;
     const bool request_guard=Recovery::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     const bool transit_guard=TradeTransit::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
+    const bool sea_display_guard=settings.assist_rival_trade && transit_guard &&
+        TradeRoutes::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase) &&
+        !std::memcmp(base+0xb8c480-kReferenceBase,"\x55\x8b\xec\x83\xe4\xf0\x81\xec\x14\x01\x00\x00",12) &&
+        !std::memcmp(base+0xb8d2ca-kReferenceBase,"\x5f\x5e\x5b\x8b\xe5\x5d\xc2\x0c\x00",9);
     BranchSite sites[] = {
+        {0xb8cbac,{0xe8,0xef,0x9c,0xf3,0xff},(uintptr_t)sea_ribbon_search,NULL,0,sea_display_guard && SeaRibbon::ValidateNative(base)},
+        {0xb5d271,{0xe8,0xa,0xf2,0x2,0x0},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xb8d434,{0xe8,0x47,0xf0,0xff,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xcde94b,{0xe8,0x30,0xdb,0xea,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xcdea16,{0xe8,0x65,0xda,0xea,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xcfbda8,{0xe8,0xd3,0x6,0xe9,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xd44de2,{0xe8,0x99,0x76,0xe4,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xde6697,{0xe8,0xe4,0x5d,0xda,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
+        {0xeb23f7,{0xe8,0x84,0xa0,0xcd,0xff},(uintptr_t)draw_transport_routes,NULL,0,sea_display_guard},
         {0xbf75d2,{0xe8,0xd9,0x31,0x0b,0x00},(uintptr_t)guarded_ai_land_sale,NULL,0,
             settings.rebalance_land && Fleet::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase) &&
             Fleet::MatchNativeSaleCaller(base)},
@@ -1078,7 +672,7 @@ static int install_rules(unsigned char *base)
         {0xdca0b0,{0xe8,0xab,0xd2,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},
         {0xdcc7f1,{0xe8,0x6a,0xab,0xed,0xff},(uintptr_t)feasible_trade_order::detoured_function,NULL,0,transit_guard && (settings.assist_rival_trade || settings.retire_stranded)},
         {0xdcc7c0, {0x83,0xec,0x0c,0x53,0x55}, (uintptr_t)guarded_trade_update, NULL, 0,
-            transit_guard && (settings.retry_blocked_paths==2 || settings.ai_diagnostics)},
+            transit_guard && (settings.retry_blocked_paths==2 || settings.ai_diagnostics || settings.assist_rival_trade)},
         {0xc9ea20, {0xe9,0x7b,0x55,0xfa,0xff}, (uintptr_t)retained_local_request, NULL, 0, settings.retry_blocked_paths==2 && request_guard},
         // Before the normal per-city conversion simulation, independently of
         // camera, AI diagnostics and offensive target options.
@@ -1105,7 +699,7 @@ static int install_rules(unsigned char *base)
         {0xbe8e51, {0xe8, 0xca, 0xe6, 0xff, 0xff}, (uintptr_t)retain_rival_city_specialty::detoured_function, NULL, 0, settings.keep_rival_specialty},
         // Use the same fleet limit for AI production, player purchases, and UI reads.
         {0xbd7325, {0xe8, 0xe6, 0xad, 0x01, 0x00}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
-        {0xbf228a, {0xe8, 0x81, 0xfe, 0xff, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
+        {0xbf228a, {0xe8, 0x81, 0xfe, 0xff, 0xff}, settings.rebalance_land ? (uintptr_t)recruitment_capacity::detoured_function : (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses || settings.rebalance_land},
         {0xbf686f, {0xe8, 0x9c, 0xb8, 0xff, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
         {0xbf6afa, {0xe8, 0x11, 0xb6, 0xff, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
         {0xd07c73, {0xe8, 0x98, 0xa4, 0xee, 0xff}, (uintptr_t)configured_fleet_capacity::detoured_function, NULL, 0, adjust_defenses},
@@ -1138,65 +732,11 @@ static int install_rules(unsigned char *base)
         {0xb97142, {0xe8, 0x09, 0xb5, 0xc5, 0xff}, (uintptr_t)configured_starting_vehicles::detoured_function, NULL, 0, settings.offensive_vehicles != 8},
     };
     const size_t count = sizeof sites / sizeof sites[0];
-    // Validate foundation specialty conversion, native preload layout/cleanup and portrait ownership helpers
-    // before enabling any caller or writing patches.
-    const struct { uint32_t address, size, hash; } native_helpers[] = {
-        {0xbdb350,128,0xf30f9e7c}, // Live partner-city lookup and owner political ID.
-        // Capacity setter, conversion consumer, view producer, crowd count
-        // generator and its constants. Reject changed semantics before writes.
-        {0xbeb710, 270, 0xdf53aaa9}, {0xbeb310, 1024, 0x21f45f84},
-        {0xbd9ff0, 44, 0x810e6be0}, {0xd57b00, 719, 0xdd9fbf3b},
-        {0xafdf60, 955, 0x91eccdd3},
-        {0x13eb950, 4, 0x8af6f615}, {0x1486054, 4, 0x4a090eb5},
-        {0x13eed94, 4, 0x9ab9dc58}, {0x145be38, 4, 0x1c95ab18},
-        {0x1567354, 4, 0xad8203d6},
-        {0xb99c16, 22, 0x6c19fab1}, {0xbefa70, 38, 0xec66066a},
-        // Rival founder's player=false argument, and Initialize's store into
-        // cCivilization::mIsPlayerOwned. Neither range has relocated operands.
-        {0xb99b74, 23, 0xa2312b3e}, {0xbf82f6, 19, 0xece952d5},
-        {0x744700, 29, 0xc330f438}, {0x751619, 7, 0x677c05e6},
-        {0x753172, 7, 0x78a7044c}, {0x7531bf, 259, 0x12262fd4},
-        {0xe01280, 27, 0xce9baa2e},
-        {0xe04930, 235, 0x95c8db06}, {0xe052b0, 236, 0xc60c21f9},
-        {0xe064d0, 112, 0x230f7833}, {0xe06610, 108, 0x1443577b},
-        // Native portrait material parser entry, cdecl; no relocated operands.
-        {0x808b80, 66, 0x374443f4},
-    };
-    for (const auto& helper : native_helpers) {
-        uint32_t hash = 0;
-        const auto* code = base + (helper.address - kReferenceBase);
-        const auto image_delta = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(base)) - kReferenceBase;
-        if (!Native::HashReferenceCode(code, helper.size, image_delta,
-                Native::CodeRelocations(helper.address), hash) || hash != helper.hash) {
-            ModAPI::Log("[Better Civ] Reference check failed: address=%08X bytes=%u expected=%08X actual=%08X image-delta=%08X.",
-                helper.address, helper.size, helper.hash, hash, image_delta);
-            return 0;
-        }
-    }
-    if (settings.stalled_seconds || settings.retire_stranded) {
-        // Verified native order setter, including its ret 0x0c. Validate its
-        // entire 212-byte body before enabling calls (FNV-1a of reference code).
-        uint32_t hash = 2166136261u;
-        const auto* code = base + (0xcac1a0 - kReferenceBase);
-        for (unsigned i = 0; i < 212; ++i) hash = (hash ^ code[i]) * 16777619u;
-        if (hash != 0x6dc24d07u) return 0;
-    }
-    const unsigned char native_retreat_condition[] = {
-        0x8b, 0x44, 0x24, 0x04, 0x80, 0xb8, 0xcc, 0x0b, 0x00, 0x00,
-        0x00, 0x74, 0x03, 0xd9, 0xe8, 0xc3, 0xd9, 0xee, 0xc3,
-    };
-    if (settings.maintain_trade_under_fire &&
-        memcmp(base + (kVehicleRetreatCondition - kReferenceBase), native_retreat_condition,
-               sizeof native_retreat_condition) != 0)
+    if (!ValidateRuleDependencies(base, settings))
         return 0;
 
-    for (size_t i = 0; i < count; ++i) {
-        if (!sites[i].enabled)
-            continue;
-        sites[i].location = base + (sites[i].site - kReferenceBase);
-        if (memcmp(sites[i].location, sites[i].expected, 5) != 0)
-            return 0;
-    }
+    if (!LocateBranchSites(base, sites, count))
+        return 0;
 
     read_script_float = (ReadScriptFloat)(base + (0x7f2650 - kReferenceBase));
     original_register_portrait = reinterpret_cast<RegisterPortrait>(base + (0xe06610 - kReferenceBase));
@@ -1232,22 +772,11 @@ static int install_rules(unsigned char *base)
     game_mode = (ModeFunction)(base + (0xb5b910 - kReferenceBase));
     original_civ_model_world = reinterpret_cast<CivModelWorld>(base + (0xb3d620 - kReferenceBase));
 
-    size_t writable = 0;
-    while (writable < count) {
-        BranchSite *site = &sites[writable];
-        if (!site->enabled) {
-            ++writable;
-            continue;
-        }
-        if (!VirtualProtect(site->location, 5, PAGE_EXECUTE_READWRITE, &site->protection))
-            break;
-        ++writable;
-    }
-
-    const int ready = writable == count;
-    if (ready) {
+    WritableBranches writable(sites, count);
+    if (writable.Ready()) {
         recovery_image_base = reinterpret_cast<uintptr_t>(base);
         trade_transit_native_ready=transit_guard;
+        original_draw_routes=sea_display_guard?reinterpret_cast<DrawPlanetRoutes>(base+0xb8c480-kReferenceBase):nullptr;
         original_trade_arrival=reinterpret_cast<TradeArrival>(base+0xc42f80-kReferenceBase);
         trade_update_continue=reinterpret_cast<uintptr_t>(base)+0xdcc7c5-kReferenceBase;
         recovery_native_ready = Recovery::ValidateNative(base, uint32_t(recovery_image_base)-kReferenceBase);
@@ -1258,34 +787,24 @@ static int install_rules(unsigned char *base)
         fleet_water=reinterpret_cast<FleetWater>(base+0xbdb9d0-kReferenceBase);
         fleet_continent=reinterpret_cast<FleetContinent>(base+0xb886e0-kReferenceBase);
         trade_route_native_ready=placement_terrain_native_ready && TradeRoutes::ValidateNative(base,uint32_t(recovery_image_base)-kReferenceBase);
+        trade_ground_native_ready=trade_route_native_ready && TradeRoutes::ValidateGroundPaint(base,uint32_t(recovery_image_base)-kReferenceBase);
         trade_path_manager=reinterpret_cast<TradePathManager>(base+0xb3d390-kReferenceBase);
         trade_path_search=reinterpret_cast<TradePathSearch>(base+0xac68a0-kReferenceBase);
         trade_land_profile=base+0x1565b54-kReferenceBase;
-        for (size_t i = 0; i < count; ++i) {
-            if (!sites[i].enabled)
-                continue;
-            write_branch(&sites[i]);
-            FlushInstructionCache(GetCurrentProcess(), sites[i].location, 5);
-        }
+        writable.Apply();
     }
-
-    // Restore in reverse order, including when multiple targets share a page.
-    while (writable) {
-        BranchSite *site = &sites[--writable];
-        if (!site->enabled)
-            continue;
-        DWORD previous;
-        VirtualProtect(site->location, 5, site->protection, &previous);
-    }
-    return ready;
+    return writable.Ready();
 }
 
-void Initialize(HINSTANCE module)
+void Initialize()
 {
-    mod_instance = module;
-    load_options();
-    const bool active = install_rules(reinterpret_cast<unsigned char*>(GetModuleHandleW(nullptr))) != 0;
+    auto* base = reinterpret_cast<unsigned char*>(GetModuleHandleW(nullptr));
+    // ResourceManager is an engine service. Even asking for it requires a supported host.
+    if (supported_executable(base))
+        settings = ReadInstalledSettings();
+    const bool active = install_rules(base) != 0;
     if (active) {
+        ModAPI::Log("[Better Civ] Public settings loaded; fleet and route rules initialized.");
         auto* system = Simulator::cSimulatorSystem::Get();
         // Initialization is post-init: register with the live simulation as well
         // as ModAPI's save registry, so Update/OnLoad callbacks actually run.
@@ -1308,17 +827,19 @@ void Initialize(HINSTANCE module)
                     : "[Better Civ Transit] Harbor diagnostics active; movement recovery disabled.")
                 : "[Better Civ Transit] Disabled: unsupported native code or lifecycle; delivery detours disabled.");
         ModAPI::Log(trade_route_native_ready && ai_observer_ready
-            ? "[Better Civ Routes] Fix 1 active: guarded land ribbon repair; trade orders unchanged."
+            ? "[Better Civ Routes] Fleet and routes test 1: grounded land ribbons with local spice clearance."
             : "[Better Civ Routes] Disabled: unsupported native code or lifecycle.");
         if (settings.retry_blocked_paths)
             ModAPI::Log(recovery_native_ready && ai_observer_ready
                 ? (settings.retry_blocked_paths == 2
-                    ? "[Better Civ Placement] Test 2 active: bounded local detours and deep-overlap separation for player and AI."
+                    ? "[Better Civ Placement] Fleet and routes test 1: bounded detours, overlap separation and congested naval siege approaches."
                     : "[Better Civ Recovery] Test 1 active: guarded same-goal retries for crowded, stationary visible land/sea units; orders retained.")
                 : "[Better Civ Recovery] Unavailable: native or lifecycle check failed; keeping vanilla movement.");
         if (settings.retire_stranded || settings.rebalance_land)
             ModAPI::Log(fleet_native_ready && ai_observer_ready ? "[Better Civ Fleet] Fix 1 active: reachable enemy ports, stable local grace and retirement veto diagnostics."
                 : "[Better Civ Fleet] Disabled: unsupported native code or lifecycle.");
+        if(settings.rebalance_land && fleet_native_ready && ai_observer_ready)
+            ModAPI::Log("[Better Civ Fleet] Fleet and routes test 1: military reinforcement reservation and idle merchant review.");
         if(settings.retire_stranded && fleet_native_ready && ai_observer_ready)
             ModAPI::Log("[Better Civ Fleet] Stranded fleets test 2 active: idle combat ships try enemy ports; bounded retries; assigned missions and player fleets protected.");
         if (settings.rethink_offensives || settings.ai_diagnostics || settings.stalled_seconds)

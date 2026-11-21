@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- The DLL and the native test program link the same gameplay modules. -->
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\NativePatches.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\CityRules.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\VehiclePrices.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\Settings.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\DiplomacyRoster.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\FleetPolicy.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\MovementPlacement.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\TradeRoutes.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\CityRules.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\VehiclePrices.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\Settings.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\FleetPolicy.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\TradeRoutes.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\NativePatches.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\Runtime.h" />
+    <None Include="$(MSBuildThisFileDirectory)src\SettingsChoices.inc" />
+  </ItemGroup>
+</Project>

@@ -48,8 +48,11 @@ static void verify_retained_request()
 static bool fleet_target_builds;
 static City* fleet_enemy_home;
 static bool __fastcall fleet_builder_test(City* city,int,int mode) {
-    assert(mode==kVehicleWater);return city==fleet_enemy_home?fleet_target_builds:fleet_mock_port;
+    return mode==kVehicleWater && (city==fleet_enemy_home?fleet_target_builds:fleet_mock_port);
 }
+static bool __fastcall fleet_air_only(City*,int,int mode) {return mode==kVehicleAir;}
+static bool __fastcall fleet_merchant_unlock(City*,int,int mode) {return mode==kVehicleLand;}
+static int __fastcall fleet_merchant_specialty_limit(Civilization*,int,int) {return 12;}
 static void verify_religious_surplus()
 {
     alignas(8) unsigned char cb[sizeof(Civilization)]={},eb[sizeof(Civilization)]={},wb[sizeof(Simulator::cPlanetModel)]={};
@@ -59,10 +62,10 @@ static void verify_religious_surplus()
     City* cities[4];for(unsigned i=0;i<4;++i){cities[i]=reinterpret_cast<City*>(cities_bytes+i*sizeof(City));cities[i]->mID=100+i;cities[i]->mPosition={i<3?1.0f:2.0f,0,500};cities[i]->field_32C={0,0,500};put_pointer(cities[i],offsetof(City,mpCivilization),i<3?civ:enemy);}
     cities[0]->mVehicleSpecialty=cities[1]->mVehicleSpecialty=kVehicleCultural;cities[2]->mVehicleSpecialty=kVehicleMilitary;
     fleet_enemy_home=cities[3];fleet_target_builds=false;fleet_mock_port=true;
-    auto storage=std::make_unique<unsigned char[]>(sizeof(Vehicle)*35);Vehicle* units[35];
+    auto storage=std::make_unique<unsigned char[]>(sizeof(Vehicle)*36);Vehicle* units[36];
     uintptr_t table[]={reinterpret_cast<uintptr_t>(ai_mock_addref),reinterpret_cast<uintptr_t>(ai_mock_release)};
     put_pointer(civ,0,table);put_pointer(enemy,0,table);civ->mID=1;enemy->mID=2;
-    for(unsigned i=0;i<35;++i){auto* u=reinterpret_cast<Vehicle*>(storage.get()+i*sizeof(Vehicle));units[i]=u;put_pointer(u,0,table);u->mID=10+i;
+    for(unsigned i=0;i<36;++i){auto* u=reinterpret_cast<Vehicle*>(storage.get()+i*sizeof(Vehicle));units[i]=u;put_pointer(u,0,table);u->mID=10+i;
         u->mHealthPoints=100;u->mTimeSinceLastWeaponFireMS=60000;u->mPosition={1,0,500};
         u->mLocomotion=i<26?kVehicleLand:kVehicleWater;u->mPurpose=(i<25 || (i>=26 && i<30))?kVehicleCultural:kVehicleMilitary;}
     put_pointer(civ,kCivCitiesBegin,cities);put_pointer(civ,kCivCitiesEnd,cities+3);
@@ -117,9 +120,75 @@ static void verify_religious_surplus()
     cities[3]->field_32C={};assert(fleet_reason(*civ,*units[1],target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::NoEnemyPort);cities[3]->field_32C={0,0,500};
     fleet_mock_port=false;assert(fleet_reason(*civ,*units[1],target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::NoBuilderPort);fleet_mock_port=true;
     cities[3]->mPosition.x=1;assert(fleet_reason(*civ,*units[1],target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::HostileLand);cities[3]->mPosition.x=2;
+    // A temporary unknown region must not turn a home garrison into a surplus.
+    cities[1]->mPosition.x=-1;
+    assert(fleet_reason(*civ,*units[1],target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::MapUnavailable);
+    cities[1]->mPosition.x=1;
+    cities[3]->mPosition.x=0;
+    assert(fleet_reason(*civ,*units[1],target,&audit)==Fleet::Reason::None && audit.veto==Fleet::Veto::MapUnavailable);
+    cities[3]->mPosition.x=2;
+    fleet_water=reinterpret_cast<FleetWater>(fleet_air_only);
+    assert(fleet_reason(*civ,*units[1],target)==Fleet::Reason::LandSurplus && target==cities[3]);
+    fleet_water=reinterpret_cast<FleetWater>(fleet_builder_test);
     Fleet::Record r;assert(!r.Observe(1,100,Fleet::Reason::LandSurplus,0,1));
     for(unsigned t=2000;t<=180000;t+=2000)assert(r.Observe(1,t%4000?100:101,Fleet::Reason::LandSurplus,t,1)==(t==180000));
     assert(!r.Observe(1,101,Fleet::Reason::LandSurplus,182000,2));
+    // The 35th place is still usable by other specialties. The idle seller
+    // acts only at 36 and must leave orders and loaded merchants alone.
+    const auto old_capacity=original_fleet_capacity;
+    fleet_water=reinterpret_cast<FleetWater>(fleet_merchant_unlock);
+    // A loaded trader on a landmass with no local partner has no delivery.
+    units[0]->mPurpose=kVehicleEconomic;units[0]->mbDead=false;units[0]->mCargoUnits=245;
+    units[0]->mDesiredSpeed=15;
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::StrandedMerchant);
+    combat_fixture_order.kind=5;
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    combat_fixture_order={};units[0]->mDesiredSpeed=0;
+    cities[3]->mPosition.x=1;
+    fleet_are_enemies=[](Civilization&,Civilization&){return false;};
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    units[0]->mPosition.x=2;
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::StrandedMerchant);
+    units[0]->mPosition.x=1;units[0]->mCargoUnits=0;
+    fleet_are_enemies=fleet_test_enemy;
+    cities[1]->mVehicleSpecialty=kVehicleEconomic;
+    assert(merchant_capacity(*civ,32)==5 && merchant_capacity(*civ,4)==4);
+    civ->mIsPlayerOwned=true;assert(merchant_capacity(*civ,32)==32);civ->mIsPlayerOwned=false;
+    cities[1]->mVehicleSpecialty=kVehicleCultural;
+    for (unsigned i=0;i<28;++i) {
+        units[i]->mPurpose=kVehicleEconomic;units[i]->mbDead=false;units[i]->mLocomotion=kVehicleWater;
+    }
+    put_pointer(civ,offsetof(Civilization,mMilitaryExpansionCity),cities[3]);
+    cities[3]->mPosition.x=1;
+    original_fleet_capacity=reinterpret_cast<decltype(original_fleet_capacity)>(fleet_merchant_specialty_limit);
+    // A mixed nation can free a slot for its religious planner without a military city.
+    cities[2]->mVehicleSpecialty=kVehicleEconomic;
+    put_pointer(civ,offsetof(Civilization,mReligiousExpansionCity),cities[3]);
+    put_pointer(civ,kCivVehiclesEnd,units+36);
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::MerchantSurplus && target==cities[3]);
+    put_pointer(civ,offsetof(Civilization,mReligiousExpansionCity),nullptr);
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    cities[2]->mVehicleSpecialty=kVehicleMilitary;put_pointer(civ,kCivVehiclesEnd,units+35);
+    assert(merchant_capacity(*civ,32)==28 && merchant_capacity(*civ,27)==27);
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    put_pointer(civ,kCivVehiclesEnd,units+36);
+    assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::MerchantSurplus);
+    combat_fixture_order.kind=5;assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    combat_fixture_order={};units[0]->mCargoUnits=5;assert(fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    units[0]->mCargoUnits=0; fleet_state={};fleet_mock_sales=0;
+    for (unsigned t=0;t<120000;t+=2000) {ai_time=t;manage_unused_fleets(2000,true);}
+    assert(!fleet_mock_sales);
+    ai_time=120000;manage_unused_fleets(2000,true);assert(fleet_mock_sales==1);
+    put_pointer(civ,kCivVehiclesEnd,units+35);
+    ai_time=150000;manage_unused_fleets(2000,true);assert(fleet_mock_sales==1);
+    civ->mIsPlayerOwned=true;
+    assert(merchant_capacity(*civ,32)==32 && fleet_reason(*civ,*units[0],target)==Fleet::Reason::None);
+    civ->mIsPlayerOwned=false;cities[3]->mPosition.x=2;
+    assert(merchant_capacity(*civ,32)==32);
+    cities[3]->mPosition.x=1;put_pointer(civ,offsetof(Civilization,mMilitaryExpansionCity),nullptr);
+    assert(merchant_capacity(*civ,32)==32);
+    original_fleet_capacity=old_capacity;
+    puts("Merchant reinforcement: shared slot, minority combat fleet, reachable objective, active trade, cargo and player protections passed.");
     fleet_state={};fleet_native_ready=ai_observer_ready=false;settings=defaults;
     fleet_planet=fleet_sdk_planet;fleet_are_enemies=fleet_hostile;fleet_water=old_water;fleet_continent=old_continent;fleet_sell=old_sell;
     current_vehicle_order=old_order;portrait_fixture_civs.clear();portrait_civilizations=sdk_portrait_civilizations;assert(ai_refs==0);

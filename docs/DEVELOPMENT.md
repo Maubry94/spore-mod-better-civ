@@ -1,8 +1,8 @@
 # Development
 
-For build and packaging commands, see the [README](../README.md). For option
-semantics, see [INSTALLERS.md](INSTALLERS.md); current evidence and remaining
-checks belong in [TESTING.md](TESTING.md). Release notes live on
+The [README](../README.md) covers building and packaging. The
+[installer guide](INSTALLERS.md) describes the options. Evidence from actual
+campaigns and outstanding checks are in [TESTING.md](TESTING.md). Release notes live on
 [GitHub Releases](https://github.com/Maubry94/spore-mod-better-civ/releases).
 
 ## Integration and safety
@@ -28,17 +28,40 @@ stream is unchanged; the portrait-order cache described below is separate.
 
 | Area | Main sources | Focused checks |
 | --- | --- | --- |
-| Native integration, prices and city rules | `src/better-civ.cpp`, `src/NativeExtensions.h` | `tests/test-better-civ.cpp`, `tests/reference-code-tests.h` |
+| Game startup, native checks and patch registration | `src/dllmain.cpp`, `src/better-civ.cpp`, `src/NativePatches.cpp`, `src/NativeExtensions.h` | `tests/test-better-civ.cpp`, `tests/reference-code-tests.h` |
+| City rules and vehicle prices | `src/CityRules.cpp`, `src/VehiclePrices.cpp` | `tests/test-better-civ.cpp` |
 | Starting specialties | `src/BalancedSpecialties.h` | `tests/balanced-specialty-tests.h` |
 | Conversion | `src/ConversionCapacity.h`, `src/ConversionDiagnostics.h` | `tests/conversion-capacity-tests.h`, `tests/conversion-tests.h` |
-| Diplomacy UI | `src/Portraits.h`, `src/PortraitPages.h`, `src/PortraitPagerUI.h`, `src/PortraitOrder.h`, `src/PortraitCallAlerts.h`, `src/PortraitSpecialties.h` | `tests/portrait*-tests.h`, `tests/pagination-tests.h`, `tests/pager-widget-tests.h` |
+| Diplomacy UI | `src/DiplomacyRoster.cpp`, `src/Portraits.h`, `src/PortraitPages.h`, `src/PortraitPagerUI.h`, `src/PortraitOrder.h`, `src/PortraitCallAlerts.h`, `src/PortraitSpecialties.h` | `tests/portrait*-tests.h`, `tests/pagination-tests.h`, `tests/pager-widget-tests.h` |
 | Offensives | `src/OffensivePolicy.h` and adapters in `src/better-civ.cpp` | `tests/offensive-tests.h` |
-| Movement | `src/MovementRecovery.h`, `src/MovementPlacement.h`, their adapters, `src/MovementRequestAdapter.h` | `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
-| Fleet retirement | `src/FleetPolicy.h`, `src/FleetAdapter.h`, `src/FleetNative.h` | `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
-| Trade display | `src/TradeRouteGeometry.h`, `src/TradeRouteAdapter.h`, `src/TradeRouteNative.h` | `tests/trade-route-tests.h` |
+| Movement | `src/MovementPlacement.cpp`, `src/MovementRecovery.h`, `src/MovementRequestAdapter.h` | `tests/simulation-policy-tests.cpp`, `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
+| Fleet retirement | `src/FleetPolicy.cpp`, `src/FleetAdapter.h`, `src/FleetNative.h` | `tests/simulation-policy-tests.cpp`, `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
+| Trade arrows and painted roads | `src/TradeRoutes.cpp`, `src/GroundTradeRoad.h`, `src/SeaRibbon.h`, `src/TradeTransitAdapter.h` | `tests/trade-route-tests.h`, `tests/sea-ribbon-tests.h` |
 | Trade transit | `src/TradeTransit.h`, `src/TradeTransitAdapter.h`, `src/HarborDiagnosticsAdapter.h` | `tests/trade-transit-tests.h` |
 | Diagnostic observation | `src/CombatDiagnostics.h`, `src/CombatObserver.h`, `src/MovementDiagnostics.h`, `src/MovementObserver.h` | `tests/combat-tests.h`, `tests/movement-tests.h` |
-| Settings and profiles | `src/Settings.h`, `installer/ModInfo.dev.xml`, `tools/installers.py` | `tests/installer-preset-tests.h`, `tests/test_installers.py` |
+| Installer and runtime settings | `ModInfo.xml`, `src/Settings.cpp`, `src/SettingsChoices.inc`, `tools/package.py` | `tests/settings-tests.cpp`, `tests/test_installers.py` |
+
+### Adding an installer option
+
+Edit `ModInfo.xml` for the label, description and default. Keep published mod,
+group and choice IDs stable so upgrades can reuse them. For a setting consumed by
+the DLL, assign the choice a unique PROP instance in `src/SettingsChoices.inc`
+and map it to its behavior in `src/Settings.cpp`. For a new option group, also
+add the group and its default in `src/Settings.h` and `src/Settings.cpp`.
+Cover the new choice in `tests/settings-tests.cpp` and `tests/test_installers.py`.
+The packaging tool checks the installer choices and their package resources
+against the same source catalog used to build the DLL.
+
+The post-initialization callback resolves choices through Spore's resource
+manager. Exactly one marker selects an option in each group. Missing or multiple
+markers select the published default for that group and produce a startup log
+entry. Vehicle speed comes directly from the selected native script. The
+eight-slot package carries both a marker and its twelve wall resources.
+
+The DLL and the native tests compile the gameplay sources listed in
+`BetterCiv.Sources.props`. New rule tests should call the corresponding module.
+The low-level integration fixture also exercises private callbacks against a
+reference executable and substitutes engine functions for that purpose.
 
 ## Persistent design constraints
 
@@ -129,16 +152,23 @@ player units. Numerical eligibility and timing rules are in [INSTALLERS.md](INST
 
 ### Trade ribbons
 
-Repair only `cPlanetModel::mLandTradeRoutes[].path` and its dirty flag. Check live
-city membership before reading the cache's non-owning pointers. Preserve native
-road data, trade agreements, orders and cargo; sea/air ribbons are unaffected.
+Land arrows use `cPlanetModel::mLandTradeRoutes[].path`. Check live city
+membership before reading borrowed pointers. For an invalid ribbon, use the
+verified native land search, require complete endpoints and sample terrain
+between them. The land search tries up to nine gate pairs and spaces attempts
+by at least two simulation seconds.
 
-Use the verified native land search (`0xAC68A0`, land profile `0x1565B54`), require
-complete endpoints and validate terrain before publishing. An unverifiable line
-stays hidden; the native renderer accepts fewer than two points. Keep the 10-second
-initial grace, one-second scans, at most one search per two simulation seconds,
-nine gate pairs per revision, 64 records and 4,096 sampled points. Reset transient
-caches on load/mode changes. A repaired ribbon does not prove a delivery occurred.
+The painted road is a separate terrain layer. Match the city's road identity to
+exactly one existing terrain stroke before replacing its paint with the verified
+arrow coordinates. Ambiguous or missing matches leave the terrain alone.
+
+Better Trade checks the native sea renderer's waypoints, including the direct
+port-to-port fallback it draws after an empty search. A land crossing queues a
+bounded water-route search. A single display point hides the rejected segment
+until a verified detour is ready. The renderer then redraws both directions.
+The sea search cache resets on reload and world changes. These paths are
+display data. Agreements, payments, cargo and vehicle navigation belong to
+the game simulation.
 
 ### Trade transit
 
@@ -172,9 +202,9 @@ of net displacement starts another. An unsuccessful retry falls through to the
 native failure. No resurrection of an order that is already missing. Unsupported
 trade code disables delivery detours as well as this hook. State resets on load.
 
-Focused harbor diagnostics record native messages as **last messages**, not
-proven causes of a later stop. The route/partner snapshots are read-only; they
-do not resolve the reported sea-ribbon mismatch by themselves.
+Focused harbor diagnostics record the **last native message** per vehicle.
+Compare it with later positions, partner snapshots, orders and cargo to determine
+whether a delivery resumed.
 
 ## Maintaining checks and documentation
 

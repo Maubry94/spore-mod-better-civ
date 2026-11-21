@@ -11,9 +11,6 @@ static bool recovery_mock_methods(const Vehicle&) { return true; }
 static void verify_movement_recovery()
 {
     namespace Q = Recovery;
-    auto option = defaults;
-    apply_option(&option,"<VehicleMovement>RetryBlockedPaths"); assert(option.retry_blocked_paths == 1);
-    apply_option(&option,"<VehicleMovement>MovementVanilla"); assert(option.retry_blocked_paths == 0);
     Q::Sample s;
     s.key=1; s.owner=10; s.order=2; s.target=20; s.goal={20,0,0};
     s.desired=13.7f; s.since_fire=12000; s.goal_stop=1; s.acceptable_stop=2;

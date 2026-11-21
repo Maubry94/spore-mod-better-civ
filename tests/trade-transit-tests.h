@@ -1,3 +1,11 @@
+static City* expected_display_ports[2];
+static uint32_t __fastcall test_draw_sea(Simulator::cPlanetModel* world,int,uint32_t a,uint32_t b,uint32_t c) {
+    assert(a==11 && b==22 && c==33);
+    assert(world->mAirTradeRoutes.empty() && world->mSeaTradeRoutes.size()==1);
+    auto pair=world->mSeaTradeRoutes.front();
+    assert(pair.first==expected_display_ports[0] && pair.second==expected_display_ports[1]);
+    return 91;
+}
 static void verify_trade_agreement_guard() {
     alignas(8) unsigned char cb[2][sizeof(Civilization)]={},city_bytes[2][sizeof(City)]={},unit_bytes[sizeof(Vehicle)]={};
     auto* own=reinterpret_cast<Civilization*>(cb[0]);auto* other=reinterpret_cast<Civilization*>(cb[1]);
@@ -29,6 +37,42 @@ static void verify_trade_agreement_guard() {
     partner->mPoliticalID=7;assert(!trade_delivery_valid(*u,order));partner->mPoliticalID=8;
     order.kind=9;assert(!trade_delivery_valid(*u,order));order.kind=5;
     assert(trade_delivery_valid(*u,order));
+    // One inland agreement, one real loading port, and a religious home port.
+    alignas(8) unsigned char port_bytes[sizeof(City)]={},world_bytes[sizeof(Simulator::cPlanetModel)]={};
+    auto* port=reinterpret_cast<City*>(port_bytes);
+    auto* world=reinterpret_cast<Simulator::cPlanetModel*>(world_bytes);
+    port->mID=12;port->mVehicleSpecialty=kVehicleCultural;port->field_32C={0,0,500};
+    put_pointer(port,offsetof(City,mpCivilization),own);
+    City* mixed_cities[]={home,port};
+    put_pointer(own,kCivCitiesBegin,mixed_cities);put_pointer(own,kCivCitiesEnd,mixed_cities+2);
+    home->field_32C={};
+    TradePartner back={partner,nullptr,0};
+    put_pointer(home,kCityTradePartnersBegin,&back);put_pointer(home,kCityTradePartnersEnd,&back+1);
+    bool land[]={false,true,false};uint32_t map=0;world->mContinentMap=&map;
+    put_pointer(world,offsetof(Simulator::cPlanetModel,mContinentAboveWater),land);
+    put_pointer(world,offsetof(Simulator::cPlanetModel,mContinentAboveWater)+4,land+3);
+    const auto old_continent=fleet_continent;fleet_continent=reinterpret_cast<FleetContinent>(fleet_test_continent);
+    const auto old_order=current_vehicle_order;current_vehicle_order=reinterpret_cast<CurrentVehicleOrder>(combat_fixture_order_getter);
+    combat_fixture_order=order;u->mPurpose=kVehicleEconomic;u->mPosition={0,0,500};
+    assert(maritime_display_port(*world,*home,*partner)==port);
+    port->field_32C.x=2;assert(!maritime_display_port(*world,*home,*partner));port->field_32C.x=0;
+    u->mLocomotion=kVehicleAir;assert(!maritime_display_port(*world,*home,*partner));u->mLocomotion=kVehicleWater;
+    back.city=nullptr;assert(!maritime_display_port(*world,*home,*partner));back.city=partner;
+    world->mAirTradeRoutes.push_back({home,partner});
+    auto old_draw=original_draw_routes;auto old_settings=settings;auto old_mode=game_mode;auto old_stage=current_mode;
+    bool old_routes=trade_route_native_ready,old_fleet=fleet_native_ready,old_observer=ai_observer_ready;
+    game_mode=mock_mode;current_mode=kCivilizationMode;settings.assist_rival_trade=1;
+    ai_observer_ready=trade_route_native_ready=fleet_native_ready=true;
+    original_draw_routes=reinterpret_cast<DrawPlanetRoutes>(test_draw_sea);
+    expected_display_ports[0]=port;expected_display_ports[1]=partner;
+    world->mAirTradeRoutesDirty=true;sea_display_hash=sea_display_pairs(*world,nullptr,nullptr);assert(sea_display_hash);
+    assert(draw_transport_routes(world,0,11,22,33)==91);
+    assert(world->mAirTradeRoutes.size()==1 && world->mAirTradeRoutes[0].first==home && world->mSeaTradeRoutes.empty());
+    assert(back.city==partner && agreement.city==home);
+    RouteList().swap(world->mAirTradeRoutes);
+    sea_display_hash=0;original_draw_routes=old_draw;trade_route_native_ready=old_routes;fleet_native_ready=old_fleet;
+    ai_observer_ready=old_observer;settings=old_settings;current_mode=old_stage;game_mode=old_mode;
+    current_vehicle_order=old_order;fleet_continent=old_continent;combat_fixture_order={};
     portrait_fixture_civs.clear();portrait_civilizations=sdk_portrait_civilizations;assert(ai_refs==0);
     puts("Trade agreement guard: live membership, partner cancellation, owner changes, both ports and order type passed.");
 }

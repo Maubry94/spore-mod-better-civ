@@ -1,40 +1,6 @@
-static void verify_fleet_policy()
-{
-    namespace F=Fleet;
-    F::Facts f; f.idle=f.safe=f.no_port=f.ship=true;
-    assert(F::Choose(f,true,false)==F::Reason::NoPort);
-    f.player=true; assert(F::Choose(f,true,true)==F::Reason::None); f.player=false;
-    f.no_port=false; assert(F::Choose(f,true,true)==F::Reason::None); f.no_port=true;
-    f.safe=false; assert(F::Choose(f,true,true)==F::Reason::None); f.safe=true;
-    f.ship=false; f.combat_land=f.suitable_port=f.sea_target=true;
-    f.hostile_land=false; f.total=36; f.local_ground=15; f.local_cities=2;
-    assert(F::Choose(f,false,true)==F::Reason::LandSurplus);
-    f.local_ground=12; assert(F::Choose(f,false,true)==F::Reason::None); f.local_ground=15;
-    f.hostile_land=true; assert(F::Choose(f,false,true)==F::Reason::None); f.hostile_land=false;
-    f.sea_units=6; assert(F::Choose(f,false,true)==F::Reason::None); f.sea_units=0;
-    f.suitable_port=false; assert(F::Choose(f,false,true)==F::Reason::None); f.suitable_port=true;
-    f.sea_target=false; assert(F::Choose(f,false,true)==F::Reason::None); f.sea_target=true;
-    f.total=31; assert(F::Choose(f,false,true)==F::Reason::None);
-    F::Record r;
-    for(unsigned t=0;t<120000;t+=2000)assert(!r.Observe(1,0,F::Reason::NoPort,t));
-    assert(r.Observe(1,0,F::Reason::NoPort,120000));
-    assert(!r.Observe(1,0,F::Reason::None,122000));
-    assert(!r.Observe(1,0,F::Reason::NoPort,124000));
-    r={};
-    for(unsigned t=0;t<=180000;t+=2000)assert(r.Observe(1,9,F::Reason::LandSurplus,t)==(t==180000));
-    assert(r.Observe(1,10,F::Reason::LandSurplus,182000)); // New overseas opportunity preserves local idle grace.
-    assert(!r.Observe(2,10,F::Reason::LandSurplus,184000));
-    assert(!r.Observe(2,10,F::Reason::LandSurplus,200000)); // Missing observations do not count.
-    Settings options=defaults;
-    apply_option(&options,"<StrandedTraders>StrandedSell");
-    apply_option(&options,"<SurplusLand>LandRebalance"); assert(options.retire_stranded && options.rebalance_land);
-    apply_option(&options,"<StrandedTraders>StrandedVanilla"); assert(!options.retire_stranded && options.rebalance_land);
-    apply_option(&options,"<SurplusLand>LandVanilla"); assert(!options.rebalance_land);
-    puts("Fleet policy: grace periods, player/combat protection, port return, target changes, garrison, sea supply and independent options passed.");
-}
 static unsigned fleet_mock_sales;
 static bool fleet_mock_port;
-static bool __fastcall fleet_mock_water(City*,int,int mode) { assert(mode==kVehicleWater); return fleet_mock_port; }
+static bool __fastcall fleet_mock_water(City*,int,int mode) { return mode==kVehicleWater && fleet_mock_port; }
 static int __fastcall fleet_mock_continent(Simulator::cPlanetModel*,int,const Math::Vector3&) {return 0;}
 static void __fastcall fleet_mock_sell(Vehicle* u,int,bool refund) {
     assert(refund); ++fleet_mock_sales; u->mbDead=true;
@@ -81,7 +47,7 @@ static void verify_fleet_adapter()
         }
         reset();run(0,60000);fleet_mock_port=true;run(62000,200000);assert(!fleet_mock_sales);
         reset();civ->mIsPlayerOwned=true;run(0,200000);assert(!fleet_mock_sales);
-        reset();u->mDesiredSpeed=n->mDesiredSpeed=15;run(0,200000);assert(!fleet_mock_sales);u->mDesiredSpeed=n->mDesiredSpeed=0;
+        reset();u->mDesiredSpeed=n->mDesiredSpeed=15;run(0,200000);assert(fleet_mock_sales==(purpose==kVehicleEconomic ? 2u : 0u));u->mDesiredSpeed=n->mDesiredSpeed=0;
         reset();u->mTimeSinceLastWeaponFireMS=n->mTimeSinceLastWeaponFireMS=0;run(0,200000);assert(!fleet_mock_sales);
         u->mTimeSinceLastWeaponFireMS=n->mTimeSinceLastWeaponFireMS=60000;
         reset();put_pointer(u,offsetof(Vehicle,mpTarget),u);put_pointer(n,offsetof(Vehicle,mpTarget),n);
@@ -106,7 +72,7 @@ static void verify_fleet_adapter()
     fleet_mock_port=false;run(182000,300000);assert(!fleet_mock_sales);run(302000,302000);assert(fleet_mock_sales==1);
     reset();civ->mIsPlayerOwned=true;run(0,200000);assert(!fleet_mock_sales);
     reset();combat_fixture_order.kind=5;run(0,200000);assert(!fleet_mock_sales);
-    reset();u->mDesiredSpeed=n->mDesiredSpeed=15;run(0,200000);assert(!fleet_mock_sales);u->mDesiredSpeed=n->mDesiredSpeed=0;
+    reset();u->mDesiredSpeed=n->mDesiredSpeed=15;run(0,200000);assert(fleet_mock_sales==2);u->mDesiredSpeed=n->mDesiredSpeed=0;
     reset();u->mTimeSinceLastWeaponFireMS=n->mTimeSinceLastWeaponFireMS=0;run(0,200000);assert(!fleet_mock_sales);
     u->mTimeSinceLastWeaponFireMS=n->mTimeSinceLastWeaponFireMS=60000;
     reset();settings.retire_stranded=0;run(0,200000);assert(!fleet_mock_sales);settings.retire_stranded=1;
@@ -156,8 +122,8 @@ static void verify_land_fleet_adapter()
     target->field_32C.x=2;assert(fleet_reason(*civ,*units[0],observed)==Fleet::Reason::None);target->field_32C.x=0;
     for(unsigned i=0;i<6;++i)units[i]->mLocomotion=kVehicleWater;
     assert(fleet_reason(*civ,*units[6],observed)==Fleet::Reason::None);
-    for(unsigned i=0;i<36;++i)units[i]->mLocomotion=i<6?kVehicleLand:kVehicleAir;
-    assert(fleet_reason(*civ,*units[0],observed)==Fleet::Reason::None); // Only the six defenders remain.
+    for(unsigned i=0;i<36;++i)units[i]->mLocomotion=i<3?kVehicleLand:kVehicleAir;
+    assert(fleet_reason(*civ,*units[0],observed)==Fleet::Reason::None); // Only the three defenders remain.
     world->mContinentMapDirty=true;assert(fleet_reason(*civ,*units[0],observed)==Fleet::Reason::None);
     fleet_planet=fleet_sdk_planet;fleet_are_enemies=fleet_hostile;fleet_water=old_water;fleet_continent=old_continent;
     current_vehicle_order=old_order;portrait_fixture_civs.clear();portrait_civilizations=sdk_portrait_civilizations;

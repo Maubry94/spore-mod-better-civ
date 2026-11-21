@@ -20,6 +20,7 @@ struct Sample {
     Vector3 position{}, goal{}, order_position{};
     int order = -1;
     float desired = 0, speed = 0, since_fire = 0, goal_stop = 0, acceptable_stop = 0;
+    float siege_range = 0; // Used only when planning a local naval firing position.
     bool eligible = false, crowded = false;
     bool Valid() const {
         return eligible && crowded && Finite(position) && Finite(goal) && Finite(order_position) &&

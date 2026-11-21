@@ -1,20 +1,14 @@
 #pragma once
 // Included inside BetterCiv after the existing bounded portrait adapters.
-using CivilizationList = eastl::vector<cCivilizationPtr>;
 using UpdatePortraits = void (__thiscall*)(Native::RivalPortraitPanel*, int);
-using HidePortrait = void (__thiscall*)(Native::RivalPortraitPanel*, int);
-using RemovePortrait = void (__thiscall*)(Native::RivalPortraitPanel*, Civilization*);
 static UpdatePortraits original_update_portraits;
-static HidePortrait native_hide_portrait;
-static RemovePortrait native_remove_portrait;
-static bool portrait_reuse_ready;
 static bool repairing_portraits;
 
 static const CivilizationList& sdk_portrait_civilizations()
 {
     return Simulator::GetData<Civilization>().data;
 }
-static const CivilizationList& (*portrait_civilizations)() = sdk_portrait_civilizations;
+const CivilizationList& (*portrait_civilizations)() = sdk_portrait_civilizations;
 
 // No borrowed object/UI pointer survives a callback. Identity values are only
 // compared, never dereferenced, and are cleared by the save/mode lifecycle.
@@ -24,26 +18,6 @@ struct PortraitHistory {
 };
 static PortraitHistory portrait_history;
 static void reset_portrait_history() { portrait_history = {}; }
-static uint64_t portrait_identity(const Simulator::cGameData* object)
-{
-    return object ? (uint64_t(object->mID) << 32) | reinterpret_cast<uintptr_t>(object) : 0;
-}
-static bool eligible_portrait(const Civilization* civ)
-{
-    return civ && !civ->mbIsDestroyed && !civ->mIsPlayerOwned && !civ->mIsNeutral &&
-        civ->mCommNotifiedFirstCityCapture && !civ->mCities.empty();
-}
-static int represented_portrait(const Native::RivalPortraitPanel* panel, const Civilization* civ)
-{
-    for (int i = 0; i < 4; ++i)
-        if (panel->slots[i].civilization == civ && civ) return i;
-    return -1;
-}
-static bool listed_portrait(const CivilizationList& civs, const Civilization* civ)
-{
-    for (const auto& item : civs) if (item.get() == civ) return true;
-    return false;
-}
 static Civilization* last_city_conqueror(const CivilizationList& civs, const PortraitHistory::Entry& old)
 {
     if (!old.last_city) return nullptr;
@@ -138,8 +112,10 @@ static void reconcile_portraits(Native::RivalPortraitPanel* panel, const Civiliz
     }
 }
 
-#include "PortraitPages.h"
-#include "PortraitCallAlerts.h"
+#include "PortraitPagerUI.h"
+bool (*prepare_portrait_pager)(Native::RivalPortraitPanel*) = ensure_portrait_pager;
+void (*clear_portrait_pager)() = dispose_portrait_pager;
+void (*refresh_portrait_pager)(Native::RivalPortraitPanel*) = draw_portrait_pager;
 #include "PortraitSpecialties.h"
 
 member_detour(reuse_portrait_slots, Native::RivalPortraitPanel, void(int deltaTime)) {

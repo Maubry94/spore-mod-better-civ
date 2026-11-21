@@ -1,7 +1,8 @@
 # Testing and current status
 
-Baseline: v1.1.0-rc.1. Installer description edits did not change the DLL or
-game-data resources. [INSTALLERS.md](INSTALLERS.md) defines current presets;
+The public comparison build is v1.1.0-rc.1. The current candidate uses one
+installer and resolves selected options from game resources at startup.
+[INSTALLERS.md](INSTALLERS.md) defines the presets.
 [DEVELOPMENT.md](DEVELOPMENT.md) records implementation constraints. Build/test
 commands are in the [README](../README.md), and patch notes are on
 [GitHub Releases](https://github.com/Maubry94/spore-mod-better-civ/releases).
@@ -19,16 +20,24 @@ These are observations in the reported campaigns, not universal guarantees.
 | Diplomacy bonus and commerce | The fought-enemy bonus accumulated, including spice-mine defense; AI routes and buyouts were observed. |
 | Offensives and retirement | Apparent abandonment and some land-unit cleanup were observed. They do not isolate every mod policy: native AI retirement is a possible explanation for cleanup without a mod sale event. |
 
-Release/Debug native checks and portable installer checks passed for the published
-baseline. Offline checks cover preset mapping and lifecycle resets. Subsequent
-text-only packaging checks confirmed unchanged DLL/resources. Do not turn an old
-candidate's unchecked checklist into a new regression claim.
+The single-installer candidate passed the Release and Debug native suites,
+including reference-executable checks and DLL loading. All three portable
+installer tests passed. Its 12 option groups, 37 choices and defaults match
+the public RC1. Packaging from v1.0, the public RC1, the previous public test
+installer and an already-updated archive produced the same 40 entries with
+the same DLL. Only the DLL and the eight-slot package changed from the previous
+test installer. All twelve wall records were preserved when its marker was added.
 
 ## Focused checks before stable release
 
-Use the public prerelease installer, launch with ModAPI and record the exact
-settings. For observing optional features, select **Better AI**, **Better Trade**
-and **AI Diagnostics (Dev): On**. Choose **Balanced (3/3/3)** only when checking
+Install the complete candidate, launch with ModAPI and record the exact choices.
+On the first launch, compare the `[Better Civ Settings]` lines with the installer.
+Each of the eleven DLL-controlled groups should show `source=marker markers=1`.
+In particular, check a selected **8 Slots per City** after upgrading from RC1.
+Vehicle Speed has its own game-data script and a separate startup message.
+
+For observing optional features, select **Better AI**, **Better Trade**
+and turn on **AI Diagnostics (Dev)**. Choose **Balanced (3/3/3)** only when checking
 starting distribution. Keep other settings fixed for comparisons. Diagnostics
 observe behavior; enabling them alone does not enable Better AI.
 
@@ -41,7 +50,7 @@ remains untested. Preserve a useful save when possible; logs do not require savi
 | Lost final port | For idle economic ships or combat ships without a same-sea enemy-port opportunity, observe `reason=no-owned-port` after two safe idle minutes, with at most one sale per nation per 30 seconds. Active missions/player fleets stay protected; regaining a port stops eligibility. Explicitly assigned ships are intentionally not sold even if their mission seems useless. |
 | Stalled offensive | After engagement, three unpaused minutes without a new gauge high can abandon the siege. Check no immediate retry during the two-minute cooldown and an alternative target when eligible. A progressing attack continues. Survivors may still fight locally. |
 | Movement and commerce | If a queue occurs, watch for about 30 seconds without intervention; correlate requests with follow-up displacement, resumed attacks/deliveries and your own new orders. A clearance request alone is not successful recovery. |
-| Trade after ownership changes | Check the land ribbon is plausible, or hidden if no verified route exists, while agreements and deliveries still behave correctly. Compare with the on-screen state. |
+| Trade after ownership changes | On land, compare the painted road with the colored arrows. At sea, check the arrows around a headland in both directions. Record the cities actually visited and whether a delivery completes. |
 
 Retain existing core validation rather than repeating the full price checklist
 after every text edit. Report any new crash, loading stall, lost save progress,
@@ -70,11 +79,12 @@ then reopen the new stream. A copied log is a snapshot, not a live feed.
 
 | Marker or field | What it can establish |
 | --- | --- |
+| `[Better Civ Settings]` | Effective DLL options at startup. A missing or conflicting marker uses that group's default. |
 | `[Better Civ Start] balanced rival=... specialty=...` | Starting rival allocation: 0 military, 1 religious, 2 economic. Separate founding groups across lifecycle resets. |
 | `[Better Civ AI]`, `stalled-abandon`, `source=rethink` | Observed offensives and mod-triggered abandonment/retargeting; `source=native` identifies native target changes. |
 | `[Better Civ Fleet] event=sell`, `reason=...` | Actual mod sale attempt through the native transaction, reason and unit specialty. `event=review` records eligibility/veto evidence. |
 | `[Better Civ Placement]`, `[Better Civ Recovery]`, `[Better Civ Movement]` | Recovery requests, follow-ups, trajectories and sampled motion. Follow-up displacement matters more than request count. |
-| `[Better Civ Routes]` | Rejected, repaired or hidden display ribbons; not proof of delivery. |
+| `[Better Civ Routes]` | `ground-road-aligned` records a terrain paint update. `sea-ribbon-rebuilt` and `sea-ribbon-hidden` report the outcome of checking an overland sea route. Observe ships separately to confirm delivery. |
 | `[Better Civ Transit]`, `[Better Civ Harbor]` | Delivery phase, cargo, native movement-failure retries, last native message, ribbon endpoints and agreement partners. A last message may be stale; a retry is not a completed delivery. |
 | `[Better Civ Conversion] capacity-initialized`, `progress=...` | Capacity repair and sampled conversion progress. |
 | `[Better Civ UI]`, `[Better Civ Combat]` | Recorded UI/communication/combat transitions; not proof of visible blinking, sound or correct rendered text. |
@@ -114,14 +124,27 @@ manual commands, a proposer losing its final port, and idle military/religious
 ships retaining a possible enemy-port objective. Follow-ups must show actual
 separation/delivery/capture, not only an issued recovery order.
 
-The road painted on the terrain at Rachan remains unresolved. The previous ribbon
-validator hid an unverified line; it did not repair the separate native road.
-Sea/air ribbon geometry and the isolated religious aircraft remain open too.
+At Rachan, this earlier candidate repaired or hid the arrows while the separate
+painted road stayed in its old location. The current candidate can align the
+matching road stroke and check sea arrows against the coastline. Both changes
+still need a visual check. The isolated religious aircraft remains an open report.
 Request-kind-0 path failures are deliberately not retried using an unproven stale
 goal. Reloading can clear a jam, so preservation does not guarantee reproduction.
 
 Ask the player when to start live log following after delivering a new candidate;
 do not launch monitoring or the game automatically.
+
+## Fleet and routes test 1
+
+With the previous test settings, observe a mixed naval siege before and after a defender appears. Look for actual displacement and renewed attacks after a `naval-siege-approach`. Check `sale-veto` while local enemies remain and whether sales resume in safety. For a mostly commercial AI fleet, compare `reserve-reinforcement` or `surplus-merchant` with subsequent military production and continued deliveries. The first fleet-and-routes candidate could move arrows around a spice node. The current candidate also attempts to update the matching painted road.
+
+## Fleet and routes test 3
+
+On Muligonts, the previous candidate logged 20 attempts to reposition a ship during a siege. After five simulated seconds, 18 had moved less than one world unit. The session ended normally. Watch for actual movement and resumed attacks in the next campaign.
+
+- For a land trade route, check that the painted road follows the arrow bends, including after reloading.
+- For a sea route around a headland, check both directions of the arrows and observe a delivery.
+- On a won planet with a bare spice node left by an eliminated ally, allow five unpaused seconds, then give a military vehicle a fresh capture order. Check that it builds a mine and retains ownership after reloading.
 
 ## Known limitations and open reports
 

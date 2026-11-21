@@ -1,101 +1,3 @@
-static void verify_placement_policy()
-{
-    namespace P=Placement;
-    Recovery::Sample s;
-    s.key=1; s.owner=10; s.order=2; s.target=20;
-    s.position={0,0,500}; s.goal={25,0,499}; s.goal_stop=1; s.acceptable_stop=2;
-    s.eligible=s.crowded=true; s.desired=20; s.since_fire=12000;
-    auto flat=[](const Math::Vector3& raw,Math::Vector3& out) { out=raw; return P::Normalize(out) ? (out=out*500,true) : false; };
-    P::Space space;
-    space.Add(s.position,{3,0,500},2,true);
-    space.Add(s.position,{0,3,500},2,true);
-    Math::Vector3 goal;
-    P::SearchReport report;
-    assert(P::FindSpace(s,2,space,flat,goal,report));
-    assert(P::Distance(s.position,goal)>=4 && P::Distance(s.position,goal)<=28);
-    for(unsigned i=0;i<space.count;++i) assert(P::ClearSegment(s.position,s.position,goal,2,space.blockers[i],true));
-    for (unsigned i=0;i<space.count;++i) assert(P::Distance(goal,space.blockers[i].position)>=4.75f);
-    // A reservation prevents a second unit from taking the same destination.
-    const auto first=goal; space.Add(s.position,first,2,false);
-    assert(P::FindSpace(s,2,space,flat,goal,report)); assert(P::Distance(first,goal)>=4.75f);
-    // Eight coincident vehicles can reserve separate endpoints on open ground.
-    P::Space stacked;for(unsigned i=0;i<8;++i)stacked.Add(s.position,s.position,2,true);
-    Math::Vector3 separated[7];
-    for(unsigned i=0;i<7;++i) {
-        assert(P::FindSpace(s,2,stacked,flat,separated[i],report));
-        for(unsigned j=0;j<i;++j)assert(P::Distance(separated[i],separated[j])>=4.75f);
-        stacked.Add(s.position,separated[i],2,false);
-    }
-    // Starting overlapped is allowed only for vehicles, and the segment may
-    // not deepen that overlap or cross an obstacle between its endpoints.
-    assert(!P::ClearSegment(s.position,s.position,{10,0,500},1,{{5,0,500},0.1f,false},true));
-    assert(!P::ClearSegment(s.position,s.position,{10,0,500},2,{{3,0,500},2,true},true));
-    assert(P::ClearSegment(s.position,s.position,{-10,0,500},2,{{3,0,500},2,true},true));
-    P::Space closed; closed.Add(s.position,s.position,50,true);
-    assert(!P::FindSpace(s,2,closed,flat,goal,report));
-    closed={}; closed.Add(s.position,s.position,2,false);
-    assert(!P::FindSpace(s,2,closed,flat,goal,report));
-    closed={}; closed.complete=false;
-    assert(!P::FindSpace(s,2,closed,flat,goal,report));
-    closed={};
-    assert(!P::FindSpace(s,2,closed,[](const Math::Vector3&,Math::Vector3&){return false;},goal,report));
-    // Terrain adapter vetoes the wrong medium along the path, not just the
-    // endpoint. Here a shoreline excludes the positive-X half of the search.
-    auto shore=[&](const Math::Vector3& raw,Math::Vector3& out) { return raw.x<=0 && flat(raw,out); };
-    assert(P::FindSpace(s,2,closed,shore,goal,report) && goal.x<=0);
-    auto cliff=[&](const Math::Vector3& raw,Math::Vector3& out) {
-        if (!flat(raw,out)) return false;
-        if (raw.x>1) out=out*(520.0f/500.0f);
-        return true;
-    };
-    assert(P::FindSpace(s,2,closed,cliff,goal,report) && goal.x<=1);
-    assert(!P::FindSpace(s,9,closed,flat,goal,report));
-    assert(!P::FindSpace(s,NAN,closed,flat,goal,report));
-    auto bad=s; bad.position={}; assert(!P::FindSpace(bad,2,closed,flat,goal,report));
-    bad=s; bad.goal={INFINITY,0,0}; assert(!P::FindSpace(bad,2,closed,flat,goal,report));
-    s.goal={0,0,500}; // Degenerate tangent direction still produces finite geometry.
-    assert(P::FindSpace(s,2,closed,flat,goal,report)); s.goal={25,0,499};
-    // Exercise the same terrain projection used by the production adapter.
-    auto sea_floor=[](const Math::Vector3&){return 490.0f;};
-    auto land=[](const Math::Vector3&){return 510.0f;};
-    Math::Vector3 projected;
-    assert(P::ProjectTerrain(s.position,true,2,500,1,sea_floor,projected) && std::fabs(P::Distance(projected,{})-501)<0.01f);
-    assert(!P::ProjectTerrain(s.position,false,2,500,0,sea_floor,projected));
-    assert(!P::ProjectTerrain(s.position,true,2,500,0,land,projected));
-    assert(P::ProjectTerrain(s.position,false,2,500,0,land,projected) && std::fabs(P::Distance(projected,{})-510)<0.01f);
-    assert(!P::ProjectTerrain(s.position,true,2,500,0,[](const Math::Vector3& p){return p.x>1?501.0f:490.0f;},projected));
-    assert(!P::ProjectTerrain(s.position,false,2,500,0,[](const Math::Vector3& p){return p.y>1?520.0f:510.0f;},projected));
-    assert(!P::ProjectTerrain(s.position,true,2,500,0,[](const Math::Vector3&){return NAN;},projected));
-    assert(!P::ProjectTerrain(s.position,true,2,500,10,sea_floor,projected));
-
-    P::Record record;
-    for (unsigned t=0;t<8000;t+=500) {
-        s.goal.x+=0.2f; s.since_fire=float(t);
-        assert(!record.Observe(s,true,t));
-    }
-    s.since_fire=8000;
-    assert(!record.Observe(s,false,8000)); // Active aim protects suppression/targeting.
-    assert(record.Observe(s,true,8500));
-    record.Begin(s,{-8,0,500},2,8500);
-    assert(record.active && record.attempts==1 && record.reserved_until==16500);
-    s.goal=record.imposed.goal; record.Finish(s,14500);
-    for (unsigned t=15000;t<38500;t+=500) assert(!record.Observe(s,true,t));
-    assert(record.Observe(s,true,38500)); record.Begin(s,{0,-8,500},2,38500);
-    record.Finish(s,44500);
-    for (unsigned t=45000;t<=80000;t+=500) assert(!record.Observe(s,true,t));
-    assert(record.attempts==2);
-    s.goal={30,0,499}; assert(!record.Observe(s,true,80500) && record.attempts==2);
-    s.target=21; assert(!record.Observe(s,true,81000) && record.attempts==0);
-    record={}; s.position={0,0,500};
-    for (unsigned t=0;t<=30000;t+=500) {
-        s.position.x=(t/500)%2?0.2f:0; assert(!record.Observe(s,true,t));
-    }
-    auto capacity=std::make_unique<P::State>();
-    for (unsigned i=1;i<=Recovery::kMaxRecords;++i) { auto* r=capacity->Find(i,1); assert(r); r->last_seen=1; }
-    assert(!capacity->Find(90000,100)); capacity->ResetSession(); assert(capacity->Find(90000,100));
-    puts("Nearby-space policy: spherical geometry, overlap escape, swept clearance, reservations, terrain vetoes, immobility, combat gates and bounded episodes passed.");
-}
-
 static unsigned placement_mock_moves,placement_mock_plans;
 static bool placement_mock_has_space;
 static bool placement_trade_phase(Vehicle&){return true;}
@@ -127,7 +29,7 @@ static void verify_placement_adapter()
     portrait_fixture_civs.push_back(civ); portrait_civilizations=mock_portrait_civilizations;
     recovery_check_methods=recovery_mock_methods; recovery_native_ready=true;
     placement_plan=placement_mock_plan; current_mode=kCivilizationMode; game_mode=mock_mode; ai_observer_ready=true;
-    settings=defaults; apply_option(&settings,"<VehicleMovement>NearbySpace"); assert(settings.retry_blocked_paths==2);
+    settings=defaults; settings.retry_blocked_paths=2;
     auto run=[&](unsigned start,unsigned end) { for (unsigned t=start;t<=end;t+=500) { ai_time=t; recover_blocked_movement(500,true); } };
     auto reset=[&]() {
         placement_state={}; placement_mock_moves=placement_mock_plans=0; placement_mock_has_space=true;
@@ -215,6 +117,49 @@ static void verify_placement_adapter()
         run(0,2000);assert(!placement_mock_moves);
     }
     n->mID=31;n->mPosition={1,0,500};
+    // A queued local waypoint is present in the live mixed siege. Native
+    // combat must retain precedence as soon as a defender or a preacher acts.
+    alignas(8) unsigned char city_bytes[sizeof(City)]={}, culture_bytes[sizeof(Simulator::cCulturalTarget)]={},
+        weapon_bytes[sizeof(Simulator::cSpaceToolData)]={}, building_bytes[sizeof(Simulator::cBuilding)]={};
+    auto* siegeCity=reinterpret_cast<City*>(city_bytes);
+    auto* culture=reinterpret_cast<Simulator::cCulturalTarget*>(culture_bytes);
+    auto* weapon=reinterpret_cast<Simulator::cSpaceToolData*>(weapon_bytes);
+    auto* building=reinterpret_cast<Simulator::cBuilding*>(building_bytes);
+    City* siegeCities[]={siegeCity}; Simulator::cCulturalTarget* cultures[]={culture};
+    Simulator::cBuilding* buildings[]={building};
+    put_pointer(other_civ,kCivVehiclesBegin,nullptr);put_pointer(other_civ,kCivVehiclesEnd,nullptr);
+    put_pointer(other_civ,kCivCitiesBegin,siegeCities);put_pointer(other_civ,kCivCitiesEnd,siegeCities+1);
+    put_pointer(siegeCity,offsetof(City,mBuildings),buildings);put_pointer(siegeCity,offsetof(City,mBuildings)+4,buildings+1);
+    put_pointer(siegeCity,offsetof(City,mCulturalTargets),cultures);put_pointer(siegeCity,offsetof(City,mCulturalTargets)+4,cultures+1);
+    siegeCity->mPosition=culture->mPosition=building->mPosition={90,0,500};
+    building->mHealthPoints=100;weapon->mRangeMultiplier=1;weapon->mMaxRange=100;
+    put_pointer(u,offsetof(Vehicle,mpWeapon),weapon);
+    int waypoint=0;
+    put_pointer(u,offsetof(Vehicle,field_1F4),&waypoint);put_pointer(u,offsetof(Vehicle,field_1F4)+4,&waypoint+1);
+    portrait_fixture_civs.push_back(other_civ);
+    reset();combat_fixture_order.target=siegeCity;run(0,7500);assert(!placement_mock_moves);
+    run(8000,8000);assert(placement_mock_moves==1 && combat_fixture_order.target==siegeCity && !u->field_1F4.empty());
+    reset();combat_fixture_order.target=siegeCity;
+    put_pointer(u,offsetof(Vehicle,mpTarget),static_cast<Simulator::cCombatant*>(building));
+    building->mPosition={105,0,500};run(0,8000);assert(placement_mock_moves==1);
+    reset();combat_fixture_order.target=siegeCity;
+    put_pointer(u,offsetof(Vehicle,mpTarget),static_cast<Simulator::cCombatant*>(building));
+    building->mPosition={90,0,500};run(0,12000);assert(!placement_mock_moves);
+    put_pointer(u,offsetof(Vehicle,mpTarget),nullptr);
+    reset();combat_fixture_order.target=siegeCity;put_pointer(u,offsetof(Vehicle,mpTarget),static_cast<Simulator::cCombatant*>(n));
+    run(0,12000);assert(!placement_mock_moves);
+    u->mPurpose=kVehicleCultural;
+    reset();combat_fixture_order.kind=3;combat_fixture_order.target=culture;
+    put_pointer(u,offsetof(Vehicle,mpTarget),static_cast<Simulator::cCombatant*>(culture));
+    u->mTimeSinceLastWeaponFireMS=0;run(0,8000);assert(placement_mock_moves==1);
+    put_pointer(culture,offsetof(Simulator::cCulturalTarget,mAttackers),units);
+    put_pointer(culture,offsetof(Simulator::cCulturalTarget,mAttackers)+4,units+1);
+    reset();combat_fixture_order.kind=3;combat_fixture_order.target=culture;
+    run(0,12000);assert(!placement_mock_moves);
+    put_pointer(u,offsetof(Vehicle,mpTarget),nullptr);put_pointer(u,offsetof(Vehicle,mpWeapon),nullptr);
+    put_pointer(u,offsetof(Vehicle,field_1F4),nullptr);put_pointer(u,offsetof(Vehicle,field_1F4)+4,nullptr);
+    portrait_fixture_civs.pop_back();u->mPurpose=kVehicleMilitary;
+    puts("Naval siege: queued warship, defender priority, unregistered preacher and registered conversion tested.");
     reset(); ai_time=9000; recover_blocked_movement(0,true); recover_blocked_movement(500,false);
     assert(!placement_mock_moves && !placement_state.records[0].key);
     run(10000,18000); assert(placement_mock_moves==1);

@@ -9,6 +9,7 @@ inline bool Travelling(int phase) { return phase==0 || phase==2 || phase==3 || p
 struct Record {
     uint64_t key=0,last_seen=0,target=0,wait_until=0,next_log=0,phase_seen=0;
     uint32_t owner=0;
+    uint64_t loading_port=0;
     int phase=-1;
     unsigned attempts=0;
     Math::Vector3 anchor{};
@@ -16,6 +17,7 @@ struct Record {
     Recovery::Sample retried{};
     uint64_t diagnostic_hash=0,next_diagnostic=0;
     void Observe(uint64_t next_target,uint32_t next_owner,const Math::Vector3& position,uint64_t now) {
+        if (target!=next_target || owner!=next_owner) loading_port=0;
         if(target!=next_target || owner!=next_owner || now<last_seen ||
             (Recovery::Finite(position) && Recovery::Distance(position,anchor)>100)) {
             target=next_target;owner=next_owner;anchor=position;attempts=0;waiting=false;

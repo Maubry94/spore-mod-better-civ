@@ -52,6 +52,230 @@ member_detour(feasible_trade_order,Vehicle,const VehicleOrder*()) {
     }
 };
 
+
+// The agreement drives purchases and diplomacy. Substitute city pairs only
+// while the planet renderer draws the arrows; simulation always sees its own lists.
+using RoutePair=eastl::pair<City*,City*>;
+using RouteList=eastl::vector<RoutePair>;
+using DrawPlanetRoutes=uint32_t(__thiscall*)(Simulator::cPlanetModel*,uint32_t,uint32_t,uint32_t);
+static DrawPlanetRoutes original_draw_routes;
+static uint64_t sea_display_hash, next_sea_display_scan;
+static bool drawing_sea_display;
+
+static bool city_agrees_with(City& city,City& other) {
+    for (const auto& p:city.mTradePartners) if (Native::TradePartnerCity(p)==&other) return true;
+    return false;
+}
+
+static City* maritime_display_port(Simulator::cPlanetModel& planet,City& inland,City& destination) {
+    if (fleet_physical_port(&inland) || !fleet_physical_port(&destination) ||
+        !city_agrees_with(inland,destination) || !city_agrees_with(destination,inland)) return nullptr;
+    auto* owner=inland.mpCivilization.get();
+    auto* partner=destination.mpCivilization.get();
+    if (!owner || !partner || owner==partner) return nullptr;
+    const int sea=fleet_continent(&planet,destination.field_32C);
+    if (sea<0 || unsigned(sea)>=planet.mContinentAboveWater.size() || planet.mContinentAboveWater[sea]) return nullptr;
+    City* chosen=nullptr;
+    for (const auto* nation:{owner,partner}) for (const auto& u:nation->mVehicles) {
+        if (!u || u->mbDead || u->mbIsDestroyed || u->mPurpose!=kVehicleEconomic) continue;
+        const auto* order=current_vehicle_order(u.get());
+        if (!order || order->kind!=5 || !order->target) continue;
+        const bool outbound=nation==owner && order->target==static_cast<Simulator::cGameData*>(&destination);
+        const bool inbound=nation==partner && order->target==static_cast<Simulator::cGameData*>(&inland);
+        if (u->mLocomotion==kVehicleAir && (outbound || inbound)) return nullptr;
+        if (!outbound || u->mLocomotion!=kVehicleWater || !Recovery::Finite(u->mPosition) ||
+            fleet_continent(&planet,u->mPosition)!=sea) continue;
+        uint64_t loaded=0;
+        for (const auto& rec:trade_transit_state.records) if (rec.key==object_key(u.get()) &&
+            rec.target==reinterpret_cast<uintptr_t>(order->target) && rec.owner==order->political_id) {
+            loaded=rec.loading_port; break;
+        }
+        City* port=nullptr;
+        unsigned possibilities=0;
+        for (const auto& city:owner->mCities) if (fleet_owned_city(city.get(),owner) &&
+            fleet_physical_port(city.get()) && fleet_continent(&planet,city->field_32C)==sea) {
+            ++possibilities;
+            if (loaded==object_key(city.get())) { port=city.get(); possibilities=1; break; }
+            port=city.get();
+        }
+        if (possibilities!=1) continue;
+        if (chosen && port!=chosen) return nullptr;
+        chosen=port;
+    }
+    return chosen;
+}
+
+static bool sea_display_ready(Simulator::cPlanetModel* planet) {
+    return settings.assist_rival_trade && trade_route_native_ready && fleet_native_ready && ai_observer_ready &&
+        current_vehicle_order && fleet_continent && planet && planet->mContinentMap && !planet->mContinentMapDirty &&
+        planet->mAirTradeRoutes.size()<=64 && planet->mSeaTradeRoutes.size()<=64;
+}
+static uint64_t sea_display_pairs(Simulator::cPlanetModel& planet,RouteList* air,RouteList* water) {
+    uint64_t hash=0;
+    for (const auto& native:planet.mAirTradeRoutes) {
+        City* home=native.first; City* destination=native.second;
+        City* port=nullptr;
+        if (trade_live_city(home) && trade_live_city(destination)) {
+            if (fleet_physical_port(home)) std::swap(home,destination);
+            port=maritime_display_port(planet,*home,*destination);
+        }
+        if (!port) { if (air) air->push_back(native); continue; }
+        const uint64_t keys[]={object_key(home),object_key(port),object_key(destination)};
+        hash=TradeRoutes::HashBytes(hash?hash:14695981039346656037ull,keys,sizeof(keys));
+        if (water) {
+            const auto same=[&](const RoutePair& pair) {return (pair.first==port && pair.second==destination) ||
+                (pair.first==destination && pair.second==port);};
+            if (std::none_of(water->begin(),water->end(),same)) water->push_back({port,destination});
+        }
+    }
+    return hash;
+}
+
+// In the native sea drawing loop only, an empty path is replaced by a
+// straight line. Check exactly the points that this loop would consume.
+// Retain no borrowed city, path-manager, order or waypoint-vector pointers.
+enum class SeaRibbonState { Empty, Check, Native, Plan, Rebuilt, Hidden };
+struct SeaRibbonEntry {
+    SeaRibbonState state=SeaRibbonState::Empty;
+    Math::Vector3 from{},to{};
+    uint64_t source_hash=0,seen=0;
+    TradeRoutes::Path source,corrected;
+};
+struct SeaRibbonCache {
+    std::array<SeaRibbonEntry,64> entries{};
+    SeaRibbon::Planner planner;
+    Simulator::cPlanetModel* world=nullptr;
+    int active=-1;
+    uint64_t next_step=0;
+    void Reset() {
+        for(auto& e:entries) e={};
+        active=-1;world=nullptr;next_step=0;
+    }
+};
+static SeaRibbonCache sea_ribbon_cache;
+static Simulator::cPlanetModel* sea_ribbon_drawing_world;
+
+static void set_sea_ribbon_output(const SeaRibbonEntry& entry,TradeNavPath& nodes) {
+    if(entry.state==SeaRibbonState::Native || entry.state==SeaRibbonState::Empty) return;
+    // One point makes both draw directions exit before allocating any mesh.
+    // Zero points would deliberately trigger the native overland shortcut.
+    nodes.clear();
+    if(entry.state!=SeaRibbonState::Rebuilt) {
+        TradeNavPoint only{};only.position=entry.from;nodes.push_back(only);return;
+    }
+    nodes.reserve(entry.corrected.size());
+    for(const auto& p:entry.corrected) {
+        TradeNavPoint node{};node.position=p;nodes.push_back(node);
+    }
+}
+
+static bool __fastcall sea_ribbon_search(void* manager,int,const void* profile,const Math::Vector3& from,
+    const Math::Vector3& to,TradeNavPath* nodes,float minimum,float maximum) {
+    const bool found=trade_path_search(manager,profile,from,to,nodes,minimum,maximum);
+    auto* planet=sea_ribbon_drawing_world;
+    if(!planet || !nodes || nodes->size()>TradeRoutes::kMaxPoints ||
+        !TradeRoutes::Finite(from) || !TradeRoutes::Finite(to)) return found;
+    float sea=0;
+    if(!trade_ready(planet,sea)) return found;
+    auto& cache=sea_ribbon_cache;
+    if(cache.world!=planet) {cache.Reset();cache.world=planet;}
+    uint64_t hash=TradeRoutes::HashBytes(14695981039346656037ull,&sea,sizeof(sea));
+    for(const auto& n:*nodes) hash=TradeRoutes::HashBytes(hash,&n.position,sizeof(n.position));
+    SeaRibbonEntry* slot=nullptr;
+    for(auto& e:cache.entries) {
+        if(e.state!=SeaRibbonState::Empty && e.source_hash==hash &&
+            TradeRoutes::Distance(e.from,from)<0.1f && TradeRoutes::Distance(e.to,to)<0.1f) {
+            e.seen=ai_time;set_sea_ribbon_output(e,*nodes);return found;
+        }
+        if(e.state!=SeaRibbonState::Check && e.state!=SeaRibbonState::Plan &&
+            (!slot || (slot->state!=SeaRibbonState::Empty &&
+             (e.state==SeaRibbonState::Empty || e.seen<slot->seen)))) slot=&e;
+    }
+    if(!slot) return found;
+    *slot={};slot->seen=ai_time;slot->from=from;slot->to=to;slot->source_hash=hash;
+    if(nodes->size()==1) {slot->state=SeaRibbonState::Native;return found;} // already hidden
+    slot->state=SeaRibbonState::Check;
+    if(nodes->empty()) slot->source={from,to};
+    else for(const auto& n:*nodes) slot->source.push_back(n.position);
+    set_sea_ribbon_output(*slot,*nodes);
+    return found;
+}
+
+static void advance_sea_ribbon(Simulator::cPlanetModel& world) {
+    auto& cache=sea_ribbon_cache;
+    if(cache.world!=&world || ai_time<cache.next_step) return;
+    cache.next_step=ai_time+100;
+    float sea=0;
+    if(!trade_ready(&world,sea)) return;
+    const auto height=[&](const Math::Vector3& position){return trade_height(&world,position);};
+    // Validate newly published routes first, so long detours do not withhold
+    // unrelated, already-correct ribbons. One terrain audit per update.
+    for(auto& e:cache.entries) if(e.state==SeaRibbonState::Check) {
+        const auto status=SeaRibbon::Inspect(e.source,sea,height);
+        e.source.clear();
+        e.state=status==SeaRibbon::Surface::Land?SeaRibbonState::Plan:SeaRibbonState::Native;
+        if(e.state==SeaRibbonState::Native) world.mSeaTradeRoutesDirty=true;
+        return;
+    }
+    bool begin=cache.active<0;
+    if(begin) {
+        for(int i=0;i<int(cache.entries.size());++i)
+            if(cache.entries[i].state==SeaRibbonState::Plan) {cache.active=i;break;}
+        if(cache.active<0) return;
+    }
+    auto& e=cache.entries[cache.active];
+    const auto result=begin ? cache.planner.Begin(e.from,e.to,sea,height,e.corrected) :
+                              cache.planner.Step(height,e.corrected);
+    if(result==SeaRibbon::Result::Pending) return;
+    // The original path was positively observed on land. If the search exhausted
+    // its graph or a terrain query failed, retain its one-point display.
+    e.state=result==SeaRibbon::Result::Found?SeaRibbonState::Rebuilt:SeaRibbonState::Hidden;
+    world.mSeaTradeRoutesDirty=true;
+    if(trade_log_allowed()) ModAPI::Log("[Better Civ Routes] t=%llu event=sea-ribbon-%s points=%u endpoints=(%.1f,%.1f,%.1f)-(%.1f,%.1f,%.1f)",
+        ai_time,e.state==SeaRibbonState::Rebuilt?"rebuilt":"hidden",unsigned(e.corrected.size()),
+        e.from.x,e.from.y,e.from.z,e.to.x,e.to.y,e.to.z);
+    cache.active=-1;
+}
+
+static void update_sea_display(int delta,bool civ_mode) {
+    if (!civ_mode || delta<=0 || !settings.assist_rival_trade ||
+        !original_draw_routes || !ai_observer_ready || !trade_route_native_ready) return;
+    auto* planet=trade_planet();
+    if (!planet) return;
+    advance_sea_ribbon(*planet);
+    if(ai_time<next_sea_display_scan) return;
+    next_sea_display_scan=ai_time+1000;
+    const uint64_t hash=sea_display_ready(planet)?sea_display_pairs(*planet,nullptr,nullptr):0;
+    if (hash!=sea_display_hash) {
+        sea_display_hash=hash;
+        planet->mAirTradeRoutesDirty=planet->mSeaTradeRoutesDirty=true;
+        if (trade_log_allowed()) ModAPI::Log("[Better Civ Routes] t=%llu event=sea-display active=%d",ai_time,hash!=0);
+    }
+}
+
+static uint32_t __fastcall draw_transport_routes(Simulator::cPlanetModel* planet,int,
+    uint32_t a,uint32_t b,uint32_t c) {
+    // Set the context only for the duration of a live Civilization planet draw.
+    struct DrawScope {
+        Simulator::cPlanetModel* previous;
+        ~DrawScope() {sea_ribbon_drawing_world=previous;}
+    } scope{sea_ribbon_drawing_world};
+    sea_ribbon_drawing_world=sea_display_ready(planet) && in_civilization()?planet:nullptr;
+    if (!drawing_sea_display && sea_display_hash && sea_display_ready(planet) && in_civilization() &&
+        (planet->mAirTradeRoutesDirty || planet->mSeaTradeRoutesDirty)) {
+        RouteList air,water=planet->mSeaTradeRoutes;
+        if (sea_display_pairs(*planet,&air,&water)) {
+            drawing_sea_display=true;
+            air.swap(planet->mAirTradeRoutes); water.swap(planet->mSeaTradeRoutes);
+            const auto result=original_draw_routes(planet,a,b,c);
+            water.swap(planet->mSeaTradeRoutes); air.swap(planet->mAirTradeRoutes);
+            drawing_sea_display=false;
+            return result;
+        }
+    }
+    return original_draw_routes(planet,a,b,c);
+}
+
 using TradeArrival=bool(__thiscall*)(Simulator::cLocomotiveObject*);
 static TradeArrival original_trade_arrival;
 static bool __fastcall trade_proposal_arrival(Simulator::cLocomotiveObject* locomotive,int) {
@@ -102,6 +326,12 @@ static bool __cdecl trade_delivery_preflight(Vehicle* unit,const int* phase) {
     if(!r)return false;
     r->Observe(reinterpret_cast<uintptr_t>(order->target),order->political_id,unit->mPosition,ai_time);
     r->phase_seen=ai_time;
+    if (settings.assist_rival_trade && unit->mLocomotion==kVehicleWater && *phase==2 &&
+        unit->mCargoUnits>0 && r->phase!=2) {
+        auto* port=unit->mpNearestCity.get();
+        if (trade_live_city(port) && port->mPoliticalID==order->political_id && fleet_physical_port(port) &&
+            Recovery::Distance(unit->mPosition,port->field_32C)<60) r->loading_port=object_key(port);
+    }
     if(r->phase!=*phase || ai_time>=r->next_log) {
         r->phase=*phase;r->next_log=ai_time+30000;
         if(trade_transit_log())ModAPI::Log("[Better Civ Transit] t=%llu event=phase unit=%u phase=%d cargo-type=%u cargo=%.2f request=%d flags=%u attempts=%u",

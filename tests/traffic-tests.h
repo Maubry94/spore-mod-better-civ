@@ -1,19 +1,3 @@
-static void verify_traffic_geometry()
-{
-    namespace P=Placement;
-    // Previously missed: a blocker ahead but well outside physical contact.
-    assert(P::CorridorBlocked({0,0,500},{30,0,500},2,{12,0,500},2));
-    assert(!P::CorridorBlocked({0,0,500},{30,0,500},2,{12,20,500},2));
-    assert(!P::CorridorBlocked({0,0,500},{30,0,500},2,{-12,0,500},2));
-    Math::Vector3 out;
-    auto flat=[](const Math::Vector3&){return 500.0f;};
-    assert(P::ProjectAir({10,0,550},2,550,490,flat,out));
-    assert(std::fabs(P::Distance(out,{})-550)<0.01f); // Preserve flight altitude.
-    assert(!P::ProjectAir({0,0,550},2,550,549,flat,out));
-    assert(!P::ProjectAir({0,0,550},2,550,490,[](const Math::Vector3&){return 546.0f;},out));
-    assert(!P::ProjectAir({0,0,550},2,550,490,[](const Math::Vector3& p){return p.x>1?549.0f:500.0f;},out));
-    puts("Traffic geometry: pre-contact corridor detection, fixed-altitude aircraft clearance and terrain/footprint vetoes passed.");
-}
 static Vehicle* traffic_idle_unit;
 static Native::VehicleOrder traffic_idle_order;
 static const Native::VehicleOrder* __fastcall traffic_order(Vehicle* unit,int) {

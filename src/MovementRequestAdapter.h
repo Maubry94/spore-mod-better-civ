@@ -20,9 +20,9 @@ static bool placement_hold_request(Vehicle& unit,const Native::LocalPointRequest
         std::isfinite(request->stop) && request->stop>=0 && request->stop<=100 &&
         std::isfinite(request->acceptable) && request->acceptable>=0 && request->acceptable<=100;
     if(!order || !P::SameOrder(r->imposed,s) || !placement_live(&unit) || !unit.mbInView ||
-        (!r->separating && (unit.mpTarget || unit.mTimeSinceLastWeaponFireMS<8000)) || !supported ||
+        (!r->separating && ((unit.mpTarget && unit.mpTarget.get()!=r->siege_aim) || unit.mTimeSinceLastWeaponFireMS<8000)) || !supported ||
         ai_time>=r->step_until || ai_time<r->last_seen || ai_time-r->last_seen>1500 ||
-        !P::Finite(s.position) || P::Distance(s.position,r->imposed.goal)<=2.5f) {
+        !P::Finite(s.position) || !r->StillApproaching(s.position) || P::Distance(s.position,r->imposed.goal)<=2.5f) {
         r->Finish(s,ai_time);return false;
     }
     // Our own MoveTo must pass through unchanged. A genuinely different local

@@ -163,13 +163,67 @@ static bool placement_yield_idle(Vehicle& blocked,const Recovery::Sample& reques
     return false;
 }
 
+// Keep the strategic order. Only idle members of a congested naval siege
+// may take one native movement step toward a clear firing position.
+static bool siege_approach(Vehicle& unit,const Civilization& owner,const Recovery::Sample& s,
+    Math::Vector3& aim,float& range,bool& contributing) {
+    const bool religious=unit.mPurpose==kVehicleCultural && s.order==3;
+    if (unit.mLocomotion!=kVehicleWater || (!religious && !(s.order==2 && unit.mPurpose==kVehicleMilitary)) ||
+        !s.target || !Recovery::Finite(s.position) || !(s.speed<0.5f) || unit.field_250!=1 ||
+        unit.field_240 || (unit.field_270&4) || !unit.mpWeapon || !recovery_check_methods(unit) ||
+        (!religious && s.since_fire<8000)) return false;
+    range=unit.mpWeapon->GetMaxRange();
+    if (!std::isfinite(range) || range<5 || range>300) return false;
+    bool traffic=false;
+    for (const auto& peer:owner.mVehicles) if (peer.get()!=&unit && placement_live(peer.get()) &&
+        peer->mLocomotion==kVehicleWater && Recovery::Distance(peer->mPosition,s.position) <
+            (std::max)(14.0f,unit.mFootprintRadius+peer->mFootprintRadius+8)) { traffic=true; break; }
+    if (!traffic) return false;
+    const void* target=reinterpret_cast<const void*>(uintptr_t(s.target));
+    for (const auto& other:portrait_civilizations()) {
+        if (!other || other.get()==&owner || other->mbIsDestroyed) continue;
+        for (const auto& city:other->mCities) {
+            if (!city || city->mbIsDestroyed || Recovery::Distance(city->mPosition,s.position)>range+110) continue;
+            bool matches=target==static_cast<Simulator::cGameData*>(city.get());
+            float nearest=INFINITY;
+            auto consider=[&](const Math::Vector3& p) {
+                const float distance=Recovery::Distance(p,s.position);
+                if (distance<nearest) { nearest=distance; aim=p; }
+            };
+            if (religious) {
+                bool aiming_at_city=!unit.mpTarget;
+                for (const auto& culture:city->mCulturalTargets) if (culture && !culture->mbIsDestroyed) {
+                    const bool ordered=target==static_cast<Simulator::cGameData*>(culture.get());
+                    const bool aiming=unit.mpTarget.get()==static_cast<Simulator::cCombatant*>(culture.get());
+                    matches|=ordered; aiming_at_city|=aiming;
+                    for (const auto& engaged:culture->mAttackers) if (engaged.get()==&unit) {contributing=true; return false;}
+                    if (aiming || (!unit.mpTarget && (ordered || target==static_cast<Simulator::cGameData*>(city.get()))))
+                        consider(culture->mPosition);
+                }
+                if (!aiming_at_city) continue;
+            } else if (matches) {
+                const auto consider_structure=[&](const auto& object) {
+                    if (object && !object->mbIsDestroyed && object->mHealthPoints>0 &&
+                        (!unit.mpTarget || unit.mpTarget.get()==static_cast<Simulator::cCombatant*>(object.get())))
+                        consider(object->mPosition);
+                };
+                for (const auto& b:city->mBuildings) consider_structure(b);
+                for (const auto& t:city->mTurrets) consider_structure(t);
+                // Keep a live target in range and always yield to a mobile defender.
+                if (unit.mpTarget && nearest<=range) return false;
+            }
+            if (matches && nearest<=range+42) return true;
+        }
+    }
+    return false;
+}
 static void recover_nearby_space(int deltaGameTime, bool civ_mode)
 {
     namespace P = Placement;
     if (!recovery_native_ready || !ai_observer_ready || !civ_mode || deltaGameTime <= 0 ||
         !current_vehicle_order || ai_time < placement_state.next_sample) return;
     placement_state.next_sample = ai_time+500;
-    struct Due { Vehicle* unit; P::Record* record; Recovery::Sample sample; bool player; bool separate; };
+    struct Due { Vehicle* unit; P::Record* record; Recovery::Sample sample; bool player; bool separate; Math::Vector3 siege_aim; float siege_range; };
     Due due[Recovery::kMaxRecords]; unsigned count = 0, observed = 0, stationary = 0, aim_blocked = 0, firing_blocked = 0;
     unsigned traders=0, supported_traders=0, loops=0;
     for (const auto& civ : portrait_civilizations()) {
@@ -205,18 +259,20 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
             auto* r=placement_state.Find(s.key,ai_time);
             if (!r) continue;
             if (r->followup_at && ai_time>=r->followup_at) {
-                if (placement_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=follow-up unit=%u civ=%u displacement=%.3f actual-speed=%.2f same-order=%d step-request=%d crowded=%d aim-present=%d",
+                if (placement_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=follow-up unit=%u civ=%u displacement=%.3f actual-speed=%.2f same-order=%d step-request=%d crowded=%d aim-present=%d siege=%d request-kind=%d queued=%u desired-speed=%.2f remaining=%.2f since-fire-ms=%.0f",
                     ai_time,unit->mID,civ->mID,P::Distance(s.position,r->step_origin),s.speed,
-                    P::SameOrder(r->original,s),P::OwnsStep(r->imposed,s),s.crowded,!quiet);
+                    P::SameOrder(r->original,s),P::OwnsStep(r->imposed,s),s.crowded,!quiet,r->siege_step,
+                    unit->field_250,unsigned(unit->field_1F4.size()),s.desired,P::Distance(s.position,r->imposed.goal),s.since_fire);
                 r->followup_at=0;
             }
             if (r->active) {
                 r->last_seen=ai_time;
                 const bool owned=P::OwnsStep(r->imposed,s);
-                const bool safe=s.eligible && P::Finite(s.position) && (r->separating || (quiet && s.since_fire>=8000));
+                const bool allowed_aim=quiet || (r->siege_aim && r->siege_aim==unit->mpTarget.get());
+                const bool safe=s.eligible && P::Finite(s.position) && r->StillApproaching(s.position) && (r->separating || (allowed_aim && s.since_fire>=8000));
                 const bool arrived=P::Finite(s.position) && P::Distance(s.position,r->imposed.goal)<=2.5f;
                 const bool expired=ai_time>=r->step_until;
-                if (!r->separating && owned && safe && arrived && s.order!=0 && r->attempts<2 &&
+                if (!r->siege_step && !r->separating && owned && safe && arrived && s.order!=0 && r->attempts<2 &&
                     placement_contact(*unit,r->original.goal)) {
                     // One bounded second leg can go around the remaining queue.
                     // Preserve the original strategic request across both legs.
@@ -251,7 +307,19 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
             loops+=r->loop_detected;
             const auto overlap=placement_overlap_peer(*unit,*civ);
             const bool separate=r->Overlap(s.eligible?overlap:0,ai_time);
-            if ((ready || separate) && count<Recovery::kMaxRecords) due[count++]={unit.get(),r,s,civ->mIsPlayerOwned,separate};
+            Math::Vector3 siege_aim{}; float range=0;
+            bool contributing=false;
+            const bool candidate=siege_approach(*unit,*civ,s,siege_aim,range,contributing);
+            const bool coastal=r->SiegeWaiting(s,candidate,ai_time);
+            // A registered preacher or firing warship holds its position at a siege.
+            bool naval_attack=candidate;
+            if (separate && !naval_attack && s.target && unit->mLocomotion==kVehicleWater && (s.order==2 || s.order==3)) {
+                const auto target=CombatDiagnostics::Resolve(order->target,false,portrait_civilizations());
+                naval_attack=target.kind==CombatDiagnostics::Kind::City || target.kind==CombatDiagnostics::Kind::Culture;
+            }
+            if ((coastal || (!naval_attack && (ready || separate)) || (naval_attack && ready && !unit->mpTarget)) &&
+                !contributing && count<Recovery::kMaxRecords)
+                due[count++]={unit.get(),r,s,civ->mIsPlayerOwned,separate && !naval_attack,siege_aim,coastal?range:0};
             // Focused diagnostics survive the general trajectory log's cap.
             // Include unsupported local requests so an exclusion is visible.
             if ((overlap || r->loop_detected || (trader && s.desired>1 && s.speed<0.5f)) && ai_time>=r->next_watch) {
@@ -273,8 +341,10 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
     const auto& c=due[placement_state.cursor++%count];
     Math::Vector3 goal; P::SearchReport report;
     placement_state.next_step=ai_time+2000;
-    if (!c.separate && placement_yield_idle(*c.unit,c.sample)) { c.record->cooldown=ai_time+10000; return; }
-    if (!placement_plan(*c.unit,c.sample,goal,report) || !P::Finite(goal)) {
+    if (!c.siege_range && !c.separate && placement_yield_idle(*c.unit,c.sample)) { c.record->cooldown=ai_time+10000; return; }
+    auto plan=c.sample;
+    if (c.siege_range) { plan.goal=c.siege_aim; plan.siege_range=c.siege_range; }
+    if (!placement_plan(*c.unit,plan,goal,report) || !P::Finite(goal)) {
         c.record->cooldown=ai_time+20000;
         if (placement_log()) ModAPI::Log("[Better Civ Placement] t=%llu event=no-space unit=%u civ=%u reason=%s terrain-rejected=%u occupied-rejected=%u",
             ai_time,c.unit->mID,c.sample.owner,report.reason,report.terrain,report.occupied);
@@ -282,7 +352,7 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
     }
     const auto waited=ai_time-c.record->start;
     const auto path=c.record->path;
-    const auto reason=c.separate?"deep-overlap":c.record->loop_detected?"quiet-loop":"stationary-contact";
+    const auto reason=c.siege_range?"naval-siege-approach":c.separate?"deep-overlap":c.record->loop_detected?"quiet-loop":"stationary-contact";
     c.record->Begin(c.sample,goal,c.unit->mFootprintRadius,ai_time);
     c.record->separating=c.separate;
     c.record->hold_native=c.separate || (!c.player && (c.sample.order==2 || c.sample.order==3 || c.sample.order==5 || c.sample.order==7 || c.sample.order==9));
@@ -290,6 +360,15 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
         ai_time,c.unit->mID,c.sample.owner,c.player,c.unit->mLocomotion,c.sample.order,reason,c.record->attempts,
         waited,path,c.sample.position.x,c.sample.position.y,c.sample.position.z,
         goal.x,goal.y,goal.z,c.sample.goal.x,c.sample.goal.y,c.sample.goal.z,report.terrain,report.occupied);
+    if (c.siege_range) {
+        // Hold a repeated simple request only. Leave queued navigation to the engine.
+        c.record->siege_step=true;
+        c.record->siege_aim=c.unit->mpTarget.get();
+        c.record->firing_position=c.siege_aim;
+        c.record->firing_range=c.siege_range;
+        c.record->active=c.sample.eligible;
+        c.record->hold_native=c.record->active;
+    }
     recovery_apply(*c.unit,c.record->imposed);
 }
 static void recover_blocked_movement(int deltaGameTime, bool civ_mode) {

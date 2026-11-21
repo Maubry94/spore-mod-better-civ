@@ -1,7 +1,7 @@
 # Better Civ
 
-Ten major cities and configurable rules for Spore's Civilization Stage: your city
-and nine major rivals, using the original planet placement system.
+Better Civ starts Spore's Civilization Stage with ten major cities, including
+your capital and nine rivals. It uses the original planet placement system.
 
 See the [installer guide](docs/INSTALLERS.md), [testing status](docs/TESTING.md)
 and [development notes](docs/DEVELOPMENT.md). Changes by version are listed on
@@ -24,33 +24,24 @@ Output goes into `dist/Release` or `dist/Debug`, never the game directory.
 Do not install the test fixture from `tests/mLibs` into the game or launcher.
 These offline checks are not an in-game stability guarantee.
 
-Portable installer checks, also run by GitHub Actions:
+GitHub Actions also runs the portable installer tests.
 
 ```powershell
-python tools/installers.py --check
 python -m unittest discover -s tests -p test_installers.py -v
 ```
 
-## Package public and developer installers
+## Package the installer
 
-Both installers contain **the same DLL** and come from the same source branch.
-`installer/ModInfo.dev.xml` is the shared option catalog; `tools/installers.py`
-generates the public `ModInfo.xml` from it. Run the generator after editing the
-catalog. Packaging refuses a stale public manifest.
-
-Use the **v1.0 release archive** (or a later developer archive) as game-data input:
+Supply the v1.0 release archive or a later public `.sporemod` for its game data.
+The packaging tool combines it with the new DLL and the options in `ModInfo.xml`.
 
 ```powershell
-python tools/package.py "Better-Civ.sporemod" "dist/Release/BetterCiv.dll" "dist/Better-Civ-v1.1.0-rc.1.sporemod"
-python tools/package.py "Better-Civ.sporemod" "dist/Release/BetterCiv.dll" "dist/Better-Civ-v1.1.0-rc.1-dev.sporemod" --profile dev
+python tools/package.py "Better-Civ.sporemod" "dist/Release/BetterCiv.dll" "dist/Better-Civ-test.sporemod"
 ```
 
-Destinations must not already exist. Public archives intentionally omit the
-separate developer option packages, so use the original v1.0 game-data archive
-when rebuilding both profiles. The [developer profile](docs/INSTALLERS.md)
-retains all 17 settings. Native game resources, SDK libraries and game executables
-are not committed to this repository. Keep symbols locally for the exact DLL
-being tested.
+Choose a new output filename. Keep the symbols from the matching DLL build
+when diagnosing a playtest. Game resources, SDK libraries and the game
+executable are supplied locally.
 
 ## Credits
 

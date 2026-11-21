@@ -56,7 +56,6 @@
     <ClCompile Include="$(MSBuildProjectDirectory)\src\dllmain.cpp" />
     <ClInclude Include="src\BetterCiv.h" />
     <ClInclude Include="src\NativeExtensions.h" />
-    <ClInclude Include="src\Settings.h" />
     <ClInclude Include="src\BalancedSpecialties.h" />
     <ClInclude Include="src\OffensivePolicy.h" />
     <ClInclude Include="src\ConversionDiagnostics.h" />
@@ -85,5 +84,6 @@
     <Error Condition="!Exists('$(SporeSdkPath)\Spore ModAPI\Spore\ModAPI.h')" Text="Set SporeSdkPath to the Spore ModAPI SDK checkout (see SdkPaths.example.props)." />
     <Error Condition="!Exists('$(SporeLauncherPath)\coreLibs\SporeModAPI.lib')" Text="Set SporeLauncherPath to the ModAPI Launcher Kit directory." />
   </Target>
+  <Import Project="BetterCiv.Sources.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
