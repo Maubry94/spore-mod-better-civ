@@ -90,6 +90,7 @@ static void verify_placement_policy()
 
 static unsigned placement_mock_moves,placement_mock_plans;
 static bool placement_mock_has_space;
+static bool placement_trade_phase(Vehicle&){return true;}
 static void __fastcall placement_mock_move(Simulator::cLocomotiveObject* self,int,
     const Math::Vector3& goal,float stop,float acceptable,bool direct)
 {
@@ -101,6 +102,7 @@ static bool placement_mock_plan(Vehicle&,const Recovery::Sample& s,Math::Vector3
 }
 static void verify_placement_adapter()
 {
+    const auto old_phase=trade_detour_check;trade_detour_check=placement_trade_phase;
     alignas(8) unsigned char cb[sizeof(Civilization)]={},ub[sizeof(Vehicle)]={},nb[sizeof(Vehicle)]={};
     auto* civ=reinterpret_cast<Civilization*>(cb); auto* u=reinterpret_cast<Vehicle*>(ub); auto* n=reinterpret_cast<Vehicle*>(nb);
     uintptr_t civ_table[]={reinterpret_cast<uintptr_t>(ai_mock_addref),reinterpret_cast<uintptr_t>(ai_mock_release)};
@@ -192,7 +194,7 @@ static void verify_placement_adapter()
     ai_lifecycle.Read(nullptr); assert(!placement_state.records[0].key && placement_state.next_step==0);
     reset(); settings.retry_blocked_paths=0; run(0,20000); assert(!placement_mock_moves && !placement_mock_plans);
     portrait_fixture_civs.clear(); portrait_civilizations=sdk_portrait_civilizations; current_vehicle_order=saved_order;
-    recovery_check_methods=recovery_methods_match; placement_plan=placement_find_space;
+    recovery_check_methods=recovery_methods_match; placement_plan=placement_find_space;trade_detour_check=old_phase;
     placement_state={}; recovery_native_ready=false; ai_observer_ready=false; settings=defaults;
     assert(ai_refs==0);
     puts("Nearby-space adapter: player/AI land/sea, native movement, retained orders, manual/native/combat precedence, idle arrival, bounded retries, no-space, pause and load reset passed.");

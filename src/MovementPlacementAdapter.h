@@ -172,6 +172,7 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
             const bool supported_order=order && ((s.order>=0 && s.order<=3) ||
                 (trader && (s.order==5 || s.order==9)) || (!trader && s.order==7));
             s.eligible=supported_order &&
+                (!trader || s.order!=5 || trade_detour_check(*unit)) &&
                 (unit->mLocomotion!=kVehicleAir || s.order==5 || s.order==9) &&
                 (trader || unit->mPurpose==kVehicleMilitary || unit->mPurpose==kVehicleCultural) &&
                 unit->field_250==1 && !unit->field_240 && unit->field_1F4.empty() &&
@@ -222,7 +223,10 @@ static void recover_nearby_space(int deltaGameTime, bool civ_mode)
                     // wins immediately. Never restore a stale strategic order.
                     const auto latest_original=r->original;
                     r->Finish(s,ai_time);
-                    if (resume) recovery_apply(*unit,latest_original);
+                    if (resume) {
+                        recovery_apply(*unit,latest_original);
+                        if(s.order==5)r->trade_settle_until=ai_time+500;
+                    }
                 }
                 continue;
             }

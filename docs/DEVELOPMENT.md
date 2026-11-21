@@ -36,6 +36,7 @@ stream is unchanged; the portrait-order cache described below is separate.
 | Movement | `src/MovementRecovery.h`, `src/MovementPlacement.h`, their adapters, `src/MovementRequestAdapter.h` | `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
 | Fleet retirement | `src/FleetPolicy.h`, `src/FleetAdapter.h`, `src/FleetNative.h` | `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
 | Trade display | `src/TradeRouteGeometry.h`, `src/TradeRouteAdapter.h`, `src/TradeRouteNative.h` | `tests/trade-route-tests.h` |
+| Trade transit | `src/TradeTransit.h`, `src/TradeTransitAdapter.h`, `src/HarborDiagnosticsAdapter.h` | `tests/trade-transit-tests.h` |
 | Diagnostic observation | `src/CombatDiagnostics.h`, `src/CombatObserver.h`, `src/MovementDiagnostics.h`, `src/MovementObserver.h` | `tests/combat-tests.h`, `tests/movement-tests.h` |
 | Settings and profiles | `src/Settings.h`, `installer/ModInfo.dev.xml`, `tools/installers.py` | `tests/installer-preset-tests.h`, `tests/test_installers.py` |
 
@@ -133,6 +134,29 @@ stays hidden; the native renderer accepts fewer than two points. Keep the 10-sec
 initial grace, one-second scans, at most one search per two simulation seconds,
 nine gate pairs per revision, 64 records and 4,096 sampled points. Reset transient
 caches on load/mode changes. A repaired ribbon does not prove a delivery occurred.
+
+### Trade transit
+
+The guarded delivery update entry at `0xDCC7C0` keeps its native stack, registers
+and phase record. Its phase dispatch, arrival helper and diagnostic-string
+layout have separate relocation-aware byte checks. An owned temporary detour is
+not an arrival at a port: defer the delivery update until the original local
+request is restored, then allow 500 simulation milliseconds for locomotion to
+consume it. Loading/unloading phases cannot start a new detour. A new order,
+changed local request, invalid agreement or combat vetoes intervention.
+
+Native path-failure bit 8 otherwise clears the trade order. For a live, visible,
+quiet trader with an active agreement and supported finite local point request,
+retry that point with native MoveTo and defer at most one simulation second.
+Do not clear native flags or modify orders, cargo, phase, payments or agreements.
+Two retries exhaust an episode; a different partner/owner or more than 100 units
+of net displacement starts another. An unsuccessful retry falls through to the
+native failure. No resurrection of an order that is already missing. Unsupported
+trade code disables delivery detours as well as this hook. State resets on load.
+
+Focused harbor diagnostics record native messages as **last messages**, not
+proven causes of a later stop. The route/partner snapshots are read-only; they
+do not resolve the reported sea-ribbon mismatch by themselves.
 
 ## Maintaining checks and documentation
 

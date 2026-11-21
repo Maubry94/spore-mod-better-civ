@@ -38,6 +38,7 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include "FleetNative.h"
 #include "TradeRouteGeometry.h"
 #include "TradeRouteNative.h"
+#include "TradeTransit.h"
 
 namespace BetterCiv {
 using City = Simulator::cCity;
@@ -661,11 +662,16 @@ static uint64_t object_key(const Simulator::cGameData* object)
     return object ? (uint64_t(object->mID) << 32) | reinterpret_cast<uintptr_t>(object) : 0;
 }
 
+static bool trade_transit_native_ready;
+static bool trade_detour_phase(Vehicle&);
+static bool (*trade_detour_check)(Vehicle&)=trade_detour_phase;
 #include "MovementRecoveryAdapter.h"
 #include "MovementPlacementAdapter.h"
 #include "MovementRequestAdapter.h"
 #include "FleetAdapter.h"
 #include "TradeRouteAdapter.h"
+#include "TradeTransitAdapter.h"
+#include "HarborDiagnosticsAdapter.h"
 
 static bool ai_log_allowed()
 {
@@ -688,6 +694,8 @@ static void reset_ai_observations()
     placement_state.ResetSession();
     fleet_state.ResetSession();
     trade_route_state.ResetSession();
+    trade_transit_state.ResetSession();
+    harbor_next_sample=harbor_route_hash=0;
     reset_portrait_history();
     reset_portrait_call_alerts();
     reset_portrait_specialties();
@@ -732,6 +740,7 @@ public:
         recover_blocked_movement(deltaGameTime, civ_mode);
         manage_unused_fleets(deltaGameTime,civ_mode);
         repair_trade_routes(deltaGameTime,civ_mode);
+        observe_harbors(deltaGameTime,civ_mode);
     }
 };
 static AIObservationLifecycle ai_lifecycle;
@@ -1024,7 +1033,7 @@ static void write_branch(BranchSite *site)
     uint32_t displacement = (uint32_t)(site->replacement - (uintptr_t)site->location - 5);
     memcpy(site->location + 1, &displacement, sizeof displacement);
     // Use a tail jump for the predicate entry, keeping its cdecl caller and float result.
-    if (site->site == kVehicleRetreatCondition || site->site == 0xc9ea20)
+    if (site->site == kVehicleRetreatCondition || site->site == 0xc9ea20 || site->site == 0xdcc7c0)
         site->location[0] = 0xe9;
 }
 
@@ -1047,7 +1056,10 @@ static int install_rules(unsigned char *base)
     const int adjust_defenses = settings.turrets != TURRETS_VANILLA;
     const int extend_layout = settings.turrets == TURRETS_ALL_SPECIALTIES;
     const bool request_guard=Recovery::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
+    const bool transit_guard=TradeTransit::ValidateNative(base,uint32_t(reinterpret_cast<uintptr_t>(base))-kReferenceBase);
     BranchSite sites[] = {
+        {0xdcc7c0, {0x83,0xec,0x0c,0x53,0x55}, (uintptr_t)guarded_trade_update, NULL, 0,
+            transit_guard && (settings.retry_blocked_paths==2 || settings.ai_diagnostics)},
         {0xc9ea20, {0xe9,0x7b,0x55,0xfa,0xff}, (uintptr_t)retained_local_request, NULL, 0, settings.retry_blocked_paths==2 && request_guard},
         // Before the normal per-city conversion simulation, independently of
         // camera, AI diagnostics and offensive target options.
@@ -1215,6 +1227,8 @@ static int install_rules(unsigned char *base)
     const int ready = writable == count;
     if (ready) {
         recovery_image_base = reinterpret_cast<uintptr_t>(base);
+        trade_transit_native_ready=transit_guard;
+        trade_update_continue=reinterpret_cast<uintptr_t>(base)+0xdcc7c5-kReferenceBase;
         recovery_native_ready = Recovery::ValidateNative(base, uint32_t(recovery_image_base)-kReferenceBase);
         original_local_request=reinterpret_cast<LocalRequestSetter>(base+0xc43fa0-kReferenceBase);
         placement_terrain_native_ready = Recovery::ValidateTerrain(base, uint32_t(recovery_image_base)-kReferenceBase);
@@ -1262,6 +1276,12 @@ void Initialize(HINSTANCE module)
         }
         portrait_reuse_ready = ai_observer_ready;
         portrait_pagination_enabled = ai_observer_ready;
+        if(settings.retry_blocked_paths==2 || settings.ai_diagnostics)
+            ModAPI::Log(trade_transit_native_ready && ai_observer_ready
+                ? (settings.retry_blocked_paths==2
+                    ? "[Better Civ Transit] Harbor test 1 active: delivery phases protected during detours; bounded retries before native path-failure cancellation."
+                    : "[Better Civ Transit] Harbor diagnostics active; movement recovery disabled.")
+                : "[Better Civ Transit] Disabled: unsupported native code or lifecycle; delivery detours disabled.");
         ModAPI::Log(trade_route_native_ready && ai_observer_ready
             ? "[Better Civ Routes] Fix 1 active: guarded land ribbon repair; trade orders unchanged."
             : "[Better Civ Routes] Disabled: unsupported native code or lifecycle.");

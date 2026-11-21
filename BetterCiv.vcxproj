@@ -69,6 +69,9 @@
     <ClInclude Include="src\MovementPlacement.h" />
     <ClInclude Include="src\MovementPlacementAdapter.h" />
     <ClInclude Include="src\MovementNative.h" />
+    <ClInclude Include="src\TradeTransit.h" />
+    <ClInclude Include="src\TradeTransitAdapter.h" />
+    <ClInclude Include="src\HarborDiagnosticsAdapter.h" />
     <ClInclude Include="src\ConversionCapacity.h" />
     <ClInclude Include="src\ReferenceCode.h" />
     <ClInclude Include="src\Portraits.h" />

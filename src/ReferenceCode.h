@@ -34,7 +34,15 @@ inline ReferenceRelocations CodeRelocations(uint32_t reference_address)
     static constexpr uint16_t trade_1565b54[] = {0x0,0x4,0x8,0xc,0x10};
     static constexpr uint16_t trade_c414c0[] = {0xfd,0x146,0x1a4,0x242,0x334,0x3d5,0x404,0x4e7,0x4f5,0x507,0x516,0x5cd,0x606};
     static constexpr uint16_t trade_b8cfd4[] = {0x12c,0x134,0x15d,0x165,0x18e,0x196,0x1ff,0x207,0x22a,0x232,0x255,0x25d,0x2a7};
+    static constexpr uint16_t transit_update[] = {0x17,0x93,0xc5,0x119,0x143,0x1f8,0x26c,0x294,0x2f5,0x328,0x34c,0x376,0x3b3,0x46c,0x4dd,0x543,0x560,0x57d};
+    static constexpr uint16_t transit_dispatch[] = {0,4,8,12,16,20};
+    static constexpr uint16_t transit_message[] = {0x2e,0x33};
+    static constexpr uint16_t transit_arrival[] = {0x262,0x26a,0x2e7,0x370,0x374,0x378,0x37c};
     switch (reference_address) {
+    case 0xdcc7c0: return {transit_update,sizeof transit_update/sizeof *transit_update};
+    case 0xdccd64: return {transit_dispatch,sizeof transit_dispatch/sizeof *transit_dispatch};
+    case 0xca73e0: return {transit_message,sizeof transit_message/sizeof *transit_message};
+    case 0xc42f80: return {transit_arrival,sizeof transit_arrival/sizeof *transit_arrival};
     case 0xac68a0: return {trade_ac68a0,sizeof trade_ac68a0/sizeof *trade_ac68a0};
     case 0xac6510: return {trade_ac6510,sizeof trade_ac6510/sizeof *trade_ac6510};
     case 0xb3d390: return {trade_b3d390,sizeof trade_b3d390/sizeof *trade_b3d390};

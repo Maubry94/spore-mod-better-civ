@@ -186,6 +186,7 @@ bool FindSpace(const Sample& s, float radius, const Space& space, Project projec
 struct Record {
     uint64_t key = 0, last_seen = 0, start = 0, cooldown = 0, step_until = 0;
     uint64_t followup_at = 0, reserved_until = 0;
+    uint64_t trade_settle_until = 0;
     unsigned blocked_resumes = 0;
     Sample signature{}, original{}, imposed{};
     Vector3 anchor{}, previous{}, episode_origin{}, step_origin{}, reserved_goal{}, direction{}, window_goal{};
@@ -234,7 +235,7 @@ struct Record {
     void Begin(const Sample& s, const Vector3& goal, float footprint, uint64_t now) {
         ++attempts; cooldown = now+kCooldownMS; original = imposed = s;
         imposed.goal = reserved_goal = goal; imposed.goal_stop = 1; imposed.acceptable_stop = 2;
-        step_origin = s.position; radius = footprint; active = true; blocked_resumes=0; hold_native=false;
+        step_origin = s.position; radius = footprint; active = true; blocked_resumes=0; hold_native=false;trade_settle_until=0;
         step_until = now+kStepMS; followup_at = now+5000; reserved_until = now+8000;
         Window(s,now);
     }

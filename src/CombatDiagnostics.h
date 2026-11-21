@@ -89,9 +89,10 @@ struct UnitRecord {
     bool seen = false, interesting = false, stationary = false;
     uint64_t stationary_ms = 0;
     bool Observe(const UnitSnapshot& s, uint64_t now) {
+        // Physical immobility must survive aim changes: the observed religious
+        // aircraft alternated between two buildings for more than 30 minutes.
         const bool changed = !seen || now < last_seen || s.owner != owner || s.order != order ||
-            s.order_target.id != order_id || s.order_target.kind != order_kind ||
-            s.aim.id != aim_id || s.aim.kind != aim_kind;
+            s.order_target.id != order_id || s.order_target.kind != order_kind;
         const float moved = Distance(s.position, anchor);
         if (changed || moved < 0 || moved > 0.25f) { anchor = s.position; anchor_since = now; }
         stationary_ms = now - anchor_since;

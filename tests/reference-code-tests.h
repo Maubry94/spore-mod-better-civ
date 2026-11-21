@@ -22,6 +22,8 @@ static constexpr RelocatedGuard relocated_guards[] = {
     {0xc43f40,96,0x285647ac}, {0xc9ea20,5,0x41be670b},
     {0xc9ee70,21,0x5925ffa9}, {0xc41e80,32,0xaace0ab2},
     {0xfa0d40,12,0x5f095bfe}, {0x967d90,4,0x51abeecc},
+    {0xdcc7c0,1444,0x70325dee}, {0xdccd64,24,0x9d27a6c9},
+    {0xca73e0,69,0x4c7f38ae}, {0xc42f80,896,0x8fc22c5d},
 };
 
 static void apply_reference_relocations(unsigned char* code,
@@ -89,7 +91,8 @@ static void prepare_relocated_reference_image(unsigned char* image, bool exhaust
         const uint32_t image_delta = uint32_t(reinterpret_cast<uintptr_t>(image)) - kReferenceBase;
         apply_reference_relocations(code, offsets, image_delta);
     }
-    assert(normalized_words == 114);
+    assert(normalized_words == 147);
+    assert(TradeTransit::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(TradeRoutes::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(Fleet::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(Recovery::ValidateNative(image, uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));

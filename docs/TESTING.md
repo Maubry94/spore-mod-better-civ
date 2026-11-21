@@ -15,7 +15,7 @@ These are observations in the reported campaigns, not universal guarantees.
 | Prices and campaign persistence | Tested terrestrial price display/payment, menu reload and full-restart reload retained progress. Completed-preload recovery reached the world in the reproduced loading case. |
 | Diplomacy | Pagination, vacant-slot reuse, elimination compaction, saved ordering, observed specialty icons, call blinking/audio and directional alerts worked in reported tests. |
 | Conversion | Capacity initialization and subsequent religious progress/captures were logged outside the camera view. |
-| Starting specialties | Ten major cities, nine rivals in a 3/3/3 mix, and specialty persistence through save/reload were observed. |
+| Starting specialties | Ten major cities, nine rivals in a 3/3/3 mix, and specialty persistence through save/reload were observed. Two consecutive fresh planets without closing Spore also retained 3/3/3. |
 | Diplomacy bonus and commerce | The fought-enemy bonus accumulated, including spice-mine defense; AI routes and buyouts were observed. |
 | Offensives and retirement | Apparent abandonment and some land-unit cleanup were observed. They do not isolate every mod policy: native AI retirement is a possible explanation for cleanup without a mod sale event. |
 
@@ -42,7 +42,6 @@ remains untested. Preserve a useful save when possible; logs do not require savi
 | Stalled offensive | After engagement, three unpaused minutes without a new gauge high can abandon the siege. Check no immediate retry during the two-minute cooldown and an alternative target when eligible. A progressing attack continues. Survivors may still fight locally. |
 | Movement and commerce | If a queue occurs, watch for about 30 seconds without intervention; correlate requests with follow-up displacement, resumed attacks/deliveries and your own new orders. A clearance request alone is not successful recovery. |
 | Trade after ownership changes | Check the land ribbon is plausible, or hidden if no verified route exists, while agreements and deliveries still behave correctly. Compare with the on-screen state. |
-| Balanced lifecycle (secondary check) | After one fresh Balanced game, return to the galaxy and create a second fresh game without closing Spore. Its nine rivals must again be 3/3/3. This tests in-process quota reset, not whether another ordinary game launches; only the initial founding is needed. Startup/foundation logs can establish the counts. |
 
 Retain existing core validation rather than repeating the full price checklist
 after every text edit. Report any new crash, loading stall, lost save progress,
@@ -76,6 +75,7 @@ then reopen the new stream. A copied log is a snapshot, not a live feed.
 | `[Better Civ Fleet] event=sell`, `reason=...` | Actual mod sale attempt through the native transaction, reason and unit specialty. `event=review` records eligibility/veto evidence. |
 | `[Better Civ Placement]`, `[Better Civ Recovery]`, `[Better Civ Movement]` | Recovery requests, follow-ups, trajectories and sampled motion. Follow-up displacement matters more than request count. |
 | `[Better Civ Routes]` | Rejected, repaired or hidden display ribbons; not proof of delivery. |
+| `[Better Civ Transit]`, `[Better Civ Harbor]` | Delivery phase, cargo, native movement-failure retries, last native message, ribbon endpoints and agreement partners. A last message may be stale; a retry is not a completed delivery. |
 | `[Better Civ Conversion] capacity-initialized`, `progress=...` | Capacity repair and sampled conversion progress. |
 | `[Better Civ UI]`, `[Better Civ Combat]` | Recorded UI/communication/combat transitions; not proof of visible blinking, sound or correct rendered text. |
 
@@ -89,6 +89,37 @@ not alone prove that nothing happened. Copying the log does not reset those caps
 During an assisted live session, inspect new blocks regularly and keep a short
 list of confirmed events, unresolved reports and missing situations. This needs
 an active reader; it is not automatic unattended monitoring between sessions.
+
+## Harbor test 1 (local candidate, 2026-11-20)
+
+The completed Asprica RC1 session recorded three stalled abandonments and two
+military retargets followed by deployment. No mod fleet-sale event was captured.
+It also recorded the player's economic ship losing its trade order at Alanguesse
+twice; the second trip was fully automatic and the player confirmed continued
+peace and an active agreement. The old log does not record the exact native
+cancellation cause. Local detours sometimes moved ships without restoring a
+complete round trip.
+
+The candidate protects delivery phases during a mod detour and briefly retries
+eligible native path failures without changing orders or cargo. It does not
+restore already missing orders. Resume an existing campaign, restart a previously
+idle trader manually once if needed, then let several round trips run unattended.
+Check that deliveries still occur, congestion can clear, and a new manual move
+or cancelled agreement takes priority. Observe for at least 30 seconds before
+intervening in a queue; report the city and time.
+
+Native route endpoints and agreement partners are now logged separately to
+investigate the Rupon/Miraisotte display discrepancy. Sea ribbon geometry is
+unchanged. The religious Turquoise aircraft alternated distant building targets
+while stationary for over 30 simulation minutes; this remains unresolved. The
+physical stationary timer no longer resets merely when the aim changes, and its
+acceptable movement area and last native message are included in diagnostics.
+
+Both the earlier Alanguesse save and final statu quo were copied and hash-checked
+outside the game directory. Reloading may clear an existing jam, so reproduction
+after loading is not assumed. This candidate has not yet been tested in game.
+Ask the player when to start live log following after delivering a new candidate;
+do not launch monitoring or the game automatically.
 
 ## Known limitations and open reports
 

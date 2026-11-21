@@ -161,5 +161,8 @@ static_assert(offsetof(Simulator::cCulturalTarget, mAttackState) == 0x1d8);
 static_assert(offsetof(Simulator::cCulturalTarget, mAttackers) == 0x1f4);
 static_assert(offsetof(Simulator::cTurret, mFreezeCount) == 0x684);
 static_assert(offsetof(Simulator::cVehicle, mPurpose) == 0xb20);
+static_assert(offsetof(Simulator::cVehicle, mCargoType) == 0xb28);
+static_assert(offsetof(Simulator::cVehicle, mCargoUnits) == 0xb58);
+static_assert(offsetof(Simulator::cVehicle, field_D14) == 0xd14);
 static_assert(offsetof(Simulator::cVehicle, field_BCC) == 0xbcc);
 }

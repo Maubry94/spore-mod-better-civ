@@ -715,6 +715,8 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
     settings.retry_blocked_paths=variant==1?2:0;
     auto* request_site=image+0xc9ea20-kReferenceBase;
     unsigned char request_original[5];memcpy(request_original,request_site,5);
+    auto* transit_site=image+0xdcc7c0-kReferenceBase;
+    unsigned char transit_original[5];memcpy(transit_original,transit_site,5);
     const uint32_t ai_sites[] = {0xbfbfe5, 0xbfbfee, 0xbfaa32};
     const uintptr_t ai_targets[] = {reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
         reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
@@ -804,6 +806,11 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
     for (uint32_t address : palette_sites)
         assert(VirtualProtect(image + address - kReferenceBase, 5, PAGE_EXECUTE_READ, &old));
     assert(install_rules(image));
+    if(settings.retry_blocked_paths==2 || settings.ai_diagnostics) {
+        uint32_t displacement;memcpy(&displacement,transit_site+1,4);
+        assert(transit_site[0]==0xe9 && reinterpret_cast<uintptr_t>(transit_site)+5+displacement==reinterpret_cast<uintptr_t>(guarded_trade_update));
+        assert(trade_transit_native_ready && trade_update_continue==reinterpret_cast<uintptr_t>(transit_site)+5);
+    } else assert(!memcmp(transit_site,transit_original,5));
     if(settings.retry_blocked_paths==2) {
         uint32_t displacement;memcpy(&displacement,request_site+1,4);
         assert(request_site[0]==0xe9 && reinterpret_cast<uintptr_t>(request_site)+5+displacement==reinterpret_cast<uintptr_t>(retained_local_request));
@@ -904,6 +911,7 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
 #include "fleet-tests.h"
 #include "trade-route-tests.h"
 #include "movement-fleet-fix-tests.h"
+#include "trade-transit-tests.h"
 
 int main(int argc, char *argv[])
 {
@@ -1018,6 +1026,7 @@ int main(int argc, char *argv[])
     verify_religious_surplus();
     verify_trade_geometry();
     verify_trade_adapter();
+    verify_trade_transit();
     verify_conversion_capacity();
     puts("Diplomacy slot reuse, priority, map/reference ownership and lifecycle checks passed.");
     verify_reference_writes(argv[1], 0);
