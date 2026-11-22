@@ -1,6 +1,6 @@
 #pragma once
-#include "MovementRecovery.h"
-#include "ReferenceCode.h"
+#include "movement/MovementRecovery.h"
+#include "engine/ReferenceCode.h"
 
 namespace BetterCiv::TradeTransit {
 // Native delivery phases: 0 approach home, 1 load, 2 leave home,

@@ -1,8 +1,8 @@
 #pragma once
 #include "BalancedSpecialties.h"
-#include "NativeExtensions.h"
-#include "Settings.h"
-#include "SimulationRuntime.h"
+#include "engine/NativeExtensions.h"
+#include "settings/Settings.h"
+#include "engine/SimulationRuntime.h"
 #include <Spore/ModAPI.h>
 #include <Spore/App/Property.h>
 #include <Spore/App/cArithmeticaResource.h>

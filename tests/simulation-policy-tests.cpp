@@ -1,5 +1,5 @@
-#include "FleetPolicy.h"
-#include "MovementPlacement.h"
+#include "ai/FleetPolicy.h"
+#include "movement/MovementPlacement.h"
 #include <cassert>
 #include <cmath>
 #include <cstdio>

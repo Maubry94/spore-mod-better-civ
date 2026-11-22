@@ -1,5 +1,5 @@
 #pragma once
-#include "Settings.h"
+#include "settings/Settings.h"
 
 namespace BetterCiv {
 // A finite bag for the nine starting rivals. No game pointers or save data.

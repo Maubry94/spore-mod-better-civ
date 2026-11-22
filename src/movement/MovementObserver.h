@@ -1,6 +1,6 @@
 #pragma once
-#include "PortraitOrder.h"
-#include "SimulationRuntime.h"
+#include "diplomacy/PortraitOrder.h"
+#include "engine/SimulationRuntime.h"
 
 namespace BetterCiv::Movement {
 

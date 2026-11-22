@@ -1,9 +1,9 @@
 #include "MovementAdapterInternal.h"
 #include "MovementNative.h"
-#include "PortraitPages.h"
-#include "Runtime.h"
-#include "SimulationRuntime.h"
-#include "NativePatches.h"
+#include "diplomacy/PortraitPages.h"
+#include "engine/Runtime.h"
+#include "engine/SimulationRuntime.h"
+#include "engine/NativePatches.h"
 #include <Spore/ModAPI.h>
 
 namespace BetterCiv {

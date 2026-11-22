@@ -1,5 +1,5 @@
 #pragma once
-#include "CombatDiagnostics.h"
+#include "combat/CombatDiagnostics.h"
 #include <algorithm>
 
 namespace BetterCiv::Movement {

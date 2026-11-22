@@ -1,5 +1,5 @@
 #include "MovementObserver.h"
-#include "NativeExtensions.h"
+#include "engine/NativeExtensions.h"
 #include <Spore/ModAPI.h>
 #include <Spore/Simulator/cCulturalTarget.h>
 #include "MovementDiagnostics.h"

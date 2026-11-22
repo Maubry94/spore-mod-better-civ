@@ -13,8 +13,8 @@ The DLL is Win32 C++17, built with MSVC v143 and the SDK revision pinned in
 Initialization uses `ModAPI::AddPostInitFunction`. SDK member adapters preserve
 the x86 calling convention, and native patches remain scoped to verified callers.
 
-`src/NativeExtensions.h` records SDK gaps and layout assertions.
-`src/ReferenceCode.h` validates native instructions, including relocation
+`src/engine/NativeExtensions.h` records SDK gaps and layout assertions.
+`src/engine/ReferenceCode.h` validates native instructions, including relocation
 operands at the actual image base. Check every required native path before
 writing patches; do not weaken a guard just to make a feature activate. A
 startup activation message must be checked separately from a successful build.
@@ -26,28 +26,29 @@ stream is unchanged; the portrait-order cache described below is separate.
 
 ## Source map
 
-| Area | Main sources | Focused checks |
+The three files at the root of [src](../src) are the DLL entry point
+(`dllmain.cpp`), the initialization declaration (`BetterCiv.h`), and the
+callbacks and registration code (`better-civ.cpp`). Each feature directory
+holds its implementation, headers and diagnostics together.
+
+| Directory | What lives here | Focused checks in [tests](../tests) |
 | --- | --- | --- |
-| Game startup, native checks and patch registration | `src/dllmain.cpp`, `src/better-civ.cpp`, `src/NativePatches.cpp`, `src/NativeExtensions.h` | `tests/test-better-civ.cpp`, `tests/reference-code-tests.h` |
-| City rules and vehicle prices | `src/CityRules.cpp`, `src/VehiclePrices.cpp` | `tests/test-better-civ.cpp` |
-| Starting specialties | `src/BalancedSpecialties.h` | `tests/balanced-specialty-tests.h` |
-| Conversion | `src/ConversionCapacity.h`, `src/ConversionDiagnostics.h` | `tests/conversion-capacity-tests.h`, `tests/conversion-tests.h` |
-| Diplomacy UI | `src/DiplomacyRoster.cpp`, `src/Portraits.h`, `src/PortraitPages.h`, `src/PortraitPagerUI.h`, `src/PortraitOrder.h`, `src/PortraitCallAlerts.h`, `src/PortraitSpecialties.h` | `tests/portrait*-tests.h`, `tests/pagination-tests.h`, `tests/pager-widget-tests.h` |
-| Offensives | `src/OffensivePolicy.h` and adapters in `src/better-civ.cpp` | `tests/offensive-tests.h` |
-| Movement | `src/MovementRecoveryAdapter.cpp`, `src/MovementPlacementAdapter.cpp`, `src/MovementPlacement.cpp`, `src/MovementRecovery.h` | `tests/simulation-policy-tests.cpp`, `tests/recovery-tests.h`, `tests/placement-tests.h`, `tests/movement-fleet-fix-tests.h` |
-| Fleet retirement | `src/FleetPolicy.cpp`, `src/FleetAdapter.cpp`, `src/FleetNative.h` | `tests/simulation-policy-tests.cpp`, `tests/fleet-tests.h`, `tests/movement-fleet-fix-tests.h` |
-| Trade arrows and painted roads | `src/TradeRoutes.cpp`, `src/GroundTradeRoad.h`, `src/SeaRibbon.h`, `src/TradeTransitAdapter.h` | `tests/trade-route-tests.h`, `tests/sea-ribbon-tests.h` |
-| Trade transit | `src/TradeTransit.h`, `src/TradeTransitAdapter.h`, `src/HarborDiagnosticsAdapter.h` | `tests/trade-transit-tests.h` |
-| Diagnostic observation | `src/CombatDiagnostics.h`, `src/CombatObserver.h`, `src/MovementDiagnostics.h`, `src/MovementObserver.cpp` | `tests/combat-tests.h`, `tests/movement-tests.h` |
-| Installer and runtime settings | `ModInfo.xml`, `src/Settings.cpp`, `src/SettingsChoices.inc`, `tools/package.py` | `tests/settings-tests.cpp`, `tests/test_installers.py` |
+| [cities](../src/cities) | City rules, starting specialties, vehicle prices and spice-node ownership after victory | `test-better-civ.cpp`, `balanced-specialty-tests.h`, `spice-ownership-tests.h` |
+| [ai](../src/ai) | Offensive targeting, fleet decisions, recruitment priorities and unit retirement | `offensive-tests.h`, `fleet-tests.h`, `simulation-policy-tests.cpp` |
+| [movement](../src/movement) | Vehicle placement, blocked movement recovery and movement observation | `placement-tests.h`, `recovery-tests.h`, `movement-tests.h`, `movement-fleet-fix-tests.h` |
+| [combat](../src/combat) | Combat observation, religious conversion capacity and diagnostics | `combat-tests.h`, `conversion-capacity-tests.h`, `conversion-tests.h` |
+| [trade](../src/trade) | Trade arrows, painted roads, deliveries and harbor diagnostics | `trade-route-tests.h`, `sea-ribbon-tests.h`, `trade-transit-tests.h` |
+| [diplomacy](../src/diplomacy) | Rival portraits, display order, pagination and call alerts | `portrait*-tests.h`, `pagination-tests.h`, `pager-widget-tests.h` |
+| [settings](../src/settings) | Runtime settings and the choice catalog shared with the installer | `settings-tests.cpp`, `test_installers.py` |
+| [engine](../src/engine) | Shared simulator access, native patching and checks against the reference executable | `test-better-civ.cpp`, `reference-code-tests.h` |
 
 ### Adding an installer option
 
 Edit `ModInfo.xml` for the label, description and default. Keep published mod,
 group and choice IDs stable so upgrades can reuse them. For a setting consumed by
-the DLL, assign the choice a unique PROP instance in `src/SettingsChoices.inc`
-and map it to its behavior in `src/Settings.cpp`. For a new option group, also
-add the group and its default in `src/Settings.h` and `src/Settings.cpp`.
+the DLL, assign the choice a unique PROP instance in `src/settings/SettingsChoices.inc`
+and map it to its behavior in `src/settings/Settings.cpp`. For a new option group, also
+add the group and its default in `src/settings/Settings.h` and `src/settings/Settings.cpp`.
 Cover the new choice in `tests/settings-tests.cpp` and `tests/test_installers.py`.
 The packaging tool checks the installer choices and their package resources
 against the same source catalog used to build the DLL.

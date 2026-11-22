@@ -1,5 +1,5 @@
 #pragma once
-#include "Settings.h"
+#include "settings/Settings.h"
 
 namespace BetterCiv {
 extern Settings settings;

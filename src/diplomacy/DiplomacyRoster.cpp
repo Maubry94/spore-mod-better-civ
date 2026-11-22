@@ -1,6 +1,6 @@
 #include "PortraitPages.h"
 #include "PortraitCallAlerts.h"
-#include "Runtime.h"
+#include "engine/Runtime.h"
 #include <Spore/ModAPI.h>
 #include <Spore/Simulator/SubSystem/CommManager.h>
 #include <Spore/Simulator/SubSystem/PlanetModel.h>

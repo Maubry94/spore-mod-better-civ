@@ -1,8 +1,8 @@
 #include "MovementAdapterInternal.h"
 #include "MovementNative.h"
-#include "PortraitPages.h"
-#include "Runtime.h"
-#include "SimulationRuntime.h"
+#include "diplomacy/PortraitPages.h"
+#include "engine/Runtime.h"
+#include "engine/SimulationRuntime.h"
 #include <Spore/ModAPI.h>
 #include <Spore/Simulator/cCulturalTarget.h>
 #include <Spore/Simulator/cObstacle.h>
@@ -15,7 +15,7 @@ namespace Simulator {
 using eastl::intrusive_ptr;
 }
 #include <Spore/Simulator/SubSystem/GameNounManager.h>
-#include "CombatDiagnostics.h"
+#include "combat/CombatDiagnostics.h"
 
 namespace BetterCiv {
 

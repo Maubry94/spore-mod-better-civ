@@ -9,8 +9,8 @@
 namespace Simulator { using eastl::intrusive_ptr; }
 #include <Spore/Simulator/SubSystem/GameNounManager.h>
 #include "TradeRoutes.h"
-#include "NativeExtensions.h"
-#include "ReferenceCode.h"
+#include "engine/NativeExtensions.h"
+#include "engine/ReferenceCode.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>

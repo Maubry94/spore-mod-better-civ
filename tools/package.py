@@ -10,7 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "ModInfo.xml"
-CATALOG = ROOT / "src/SettingsChoices.inc"
+CATALOG = ROOT / "src/settings/SettingsChoices.inc"
 PROP = 0x00B1B104
 MARKER_GROUP = 0xE2C5417D
 SPEED_SCRIPT = (0x0472329B, 0x024A4F5A, 0xB3A05C62)

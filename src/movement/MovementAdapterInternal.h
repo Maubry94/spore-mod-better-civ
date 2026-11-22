@@ -1,6 +1,6 @@
 #pragma once
 #include "MovementAdapter.h"
-#include "NativeExtensions.h"
+#include "engine/NativeExtensions.h"
 
 namespace BetterCiv {
 

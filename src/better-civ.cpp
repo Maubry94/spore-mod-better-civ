@@ -16,30 +16,30 @@ namespace Simulator { using eastl::intrusive_ptr; }
 #include <Spore/UTFWin/IButton.h>
 #include <Spore/UTFWin/IWinProc.h>
 #include <Spore/UTFWin/StdDrawable.h>
-#include "CityRules.h"
-#include "Runtime.h"
-#include "SimulationRuntime.h"
-#include "MovementAdapter.h"
-#include "MovementObserver.h"
-#include "FleetAdapter.h"
-#include "VehiclePrices.h"
-#include "OffensivePolicy.h"
-#include "NativePatches.h"
+#include "cities/CityRules.h"
+#include "engine/Runtime.h"
+#include "engine/SimulationRuntime.h"
+#include "movement/MovementAdapter.h"
+#include "movement/MovementObserver.h"
+#include "ai/FleetAdapter.h"
+#include "cities/VehiclePrices.h"
+#include "ai/OffensivePolicy.h"
+#include "engine/NativePatches.h"
 #include "BetterCiv.h"
-#include "ConversionDiagnostics.h"
-#include "CombatDiagnostics.h"
-#include "MovementDiagnostics.h"
-#include "ConversionCapacity.h"
-#include "ReferenceCode.h"
-#include "MovementRecovery.h"
-#include "MovementPlacement.h"
-#include "MovementNative.h"
-#include "FleetNative.h"
-#include "TradeRoutes.h"
-#include "TradeTransit.h"
-#include "SeaRibbon.h"
-#include "PortraitPages.h"
-#include "PortraitCallAlerts.h"
+#include "combat/ConversionDiagnostics.h"
+#include "combat/CombatDiagnostics.h"
+#include "movement/MovementDiagnostics.h"
+#include "combat/ConversionCapacity.h"
+#include "engine/ReferenceCode.h"
+#include "movement/MovementRecovery.h"
+#include "movement/MovementPlacement.h"
+#include "movement/MovementNative.h"
+#include "ai/FleetNative.h"
+#include "trade/TradeRoutes.h"
+#include "trade/TradeTransit.h"
+#include "trade/SeaRibbon.h"
+#include "diplomacy/PortraitPages.h"
+#include "diplomacy/PortraitCallAlerts.h"
 
 namespace BetterCiv {
 static_assert(kMilitary == kVehicleMilitary && kReligious == kVehicleCultural &&
@@ -153,7 +153,7 @@ member_detour(safe_restore_portrait, Native::RivalPortraitPanel, void(int slot, 
     }
 };
 
-#include "Portraits.h"
+#include "diplomacy/Portraits.h"
 
 static uint32_t live_trade_partner_id(const Simulator::cCityPartner& partner)
 {
@@ -266,10 +266,10 @@ struct AIRecord {
 static AIRecord ai_records[32];
 
 static bool trade_transit_native_ready;
-#include "TradeRouteAdapter.h"
-#include "TradeTransitAdapter.h"
-#include "HarborDiagnosticsAdapter.h"
-#include "SpiceOwnershipAdapter.h"
+#include "trade/TradeRouteAdapter.h"
+#include "trade/TradeTransitAdapter.h"
+#include "trade/HarborDiagnosticsAdapter.h"
+#include "cities/SpiceOwnershipAdapter.h"
 
 static bool ai_log_allowed()
 {
@@ -468,7 +468,7 @@ static void observe_conversion()
     }
 }
 
-#include "CombatObserver.h"
+#include "combat/CombatObserver.h"
 
 static unsigned cancel_city_attack(Civilization* civilization, City* target, int specialty)
 {
