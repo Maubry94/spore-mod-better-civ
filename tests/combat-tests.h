@@ -26,8 +26,9 @@ static void verify_combat_diagnostics()
     s.position.x = 2;
     assert(!r.Observe(s, 25000) && r.stationary_ms == 0);
     s.aim.kind = D::Kind::Turret; s.aim.id = 22;
-    assert(!r.Observe(s, 30000) && r.stationary_ms == 0);
-    assert(r.Observe(s, 40000) && r.stationary_ms == 10000);
+    assert(!r.Observe(s, 30000) && r.stationary_ms == 5000);
+    assert(r.Observe(s, 40000) && r.stationary_ms == 15000);
+    s.aim.id=23;r.Observe(s,41000);assert(r.stationary_ms==16000);
     s.owner = 8; r.Observe(s, 45000); assert(!r.stationary);
     r.Observe(s, 1); assert(r.stationary_ms == 0); // Timer rollback cannot underflow.
     s.position.x = std::numeric_limits<float>::quiet_NaN();

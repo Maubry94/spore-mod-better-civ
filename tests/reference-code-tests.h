@@ -2,6 +2,9 @@
 
 struct RelocatedGuard { uint32_t address, size, hash; };
 static constexpr RelocatedGuard relocated_guards[] = {
+    {0xbf74d0,271,0xfe043e9b},
+    {0xbdb350,128,0xf30f9e7c},
+    {0xdca090,1697,0x8225c49b},
         {0xcaa7b0,741,0x99723fdf},
         {0xc9e950,148,0x91c2da11},
         {0xbdb9d0,165,0xf057ae19},
@@ -15,6 +18,9 @@ static constexpr RelocatedGuard relocated_guards[] = {
     {0x1565b54,20,0x83747623},
     {0xc414c0,1943,0xe2ee0198},
     {0xb8d2e0,263,0x2ed294c4},
+    {0xb8d570,816,0x035815a5}, {0xbd89b0,37,0x25a0a89d},
+    {0xfacea0,40,0x9312cee2}, {0xf98890,89,0x78f37836}, {0xfaced0,156,0x60854742},
+    {0xf988f0,16,0xaf743cfd}, {0xf98900,16,0x5eefdd73},
     {0xb8cfd4,767,0x8f586850},
     {0xbeb710, 270, 0xdf53aaa9}, {0xbeb310, 1024, 0x21f45f84},
     {0xd57b00, 719, 0xdd9fbf3b}, {0xafdf60, 955, 0x91eccdd3},
@@ -22,6 +28,8 @@ static constexpr RelocatedGuard relocated_guards[] = {
     {0xc43f40,96,0x285647ac}, {0xc9ea20,5,0x41be670b},
     {0xc9ee70,21,0x5925ffa9}, {0xc41e80,32,0xaace0ab2},
     {0xfa0d40,12,0x5f095bfe}, {0x967d90,4,0x51abeecc},
+    {0xdcc7c0,1444,0x70325dee}, {0xdccd64,24,0x9d27a6c9},
+    {0xca73e0,69,0x4c7f38ae}, {0xc42f80,896,0x8fc22c5d},
 };
 
 static void apply_reference_relocations(unsigned char* code,
@@ -89,12 +97,27 @@ static void prepare_relocated_reference_image(unsigned char* image, bool exhaust
         const uint32_t image_delta = uint32_t(reinterpret_cast<uintptr_t>(image)) - kReferenceBase;
         apply_reference_relocations(code, offsets, image_delta);
     }
-    assert(normalized_words == 114);
+    assert(normalized_words == 173);
+    assert(TradeTransit::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(TradeRoutes::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
+    assert(TradeRoutes::ValidateGroundPaint(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
+    assert(SeaRibbon::ValidateNative(image));
     assert(Fleet::ValidateNative(image,uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(Recovery::ValidateNative(image, uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     assert(Recovery::ValidateTerrain(image, uint32_t(reinterpret_cast<uintptr_t>(image))-kReferenceBase));
     if (exhaustive) {
+        // Execute the game's actual city-partner lookup, not a layout mock.
+        auto* lookup_code=image+0xbdb350-kReferenceBase;
+        DWORD lookup_protection;assert(VirtualProtect(lookup_code,128,PAGE_EXECUTE_READWRITE,&lookup_protection));
+        alignas(8) unsigned char home[sizeof(City)]={},foreign[sizeof(City)]={},owner[sizeof(Civilization)]={};
+        uintptr_t table[20]={};table[0x4c/4]=reinterpret_cast<uintptr_t>(mock_political_id);
+        put_pointer(owner,0,table);owner[0x24]=7;put_pointer(foreign,0x590,owner);
+        TradePartner partners[]={ {foreign,reinterpret_cast<void*>(0x1234),99} };
+        put_pointer(home,0x55c,partners);put_pointer(home,0x560,partners+1);
+        const auto lookup=reinterpret_cast<bool(__thiscall*)(void*,uint32_t)>(lookup_code);
+        assert(lookup(home,7) && !lookup(home,8));owner[0x24]=8;
+        assert(!lookup(home,7) && lookup(home,8));
+        assert(VirtualProtect(lookup_code,128,lookup_protection,&lookup_protection));
         auto* predicate=image+0xfa0d40-kReferenceBase;
         DWORD original_protection;
         assert(VirtualProtect(predicate,12,PAGE_EXECUTE_READWRITE,&original_protection));

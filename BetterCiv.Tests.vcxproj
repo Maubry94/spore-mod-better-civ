@@ -61,8 +61,11 @@
     <Error Condition="!Exists('$(SporeSdkPath)\Spore ModAPI\Spore\ModAPI.h')" Text="Set SporeSdkPath to the Spore ModAPI SDK checkout (see SdkPaths.example.props)." />
     <Error Condition="!Exists('$(SporeLauncherPath)\coreLibs\SporeModAPI.lib')" Text="Set SporeLauncherPath to the ModAPI Launcher Kit directory." />
   </Target>
+  <Import Project="BetterCiv.Sources.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ItemGroup>
     <ClCompile Include="$(MSBuildProjectDirectory)\tests\test-better-civ.cpp" />
+    <ClCompile Include="$(MSBuildProjectDirectory)\tests\settings-tests.cpp" />
+    <ClCompile Include="$(MSBuildProjectDirectory)\tests\simulation-policy-tests.cpp" />
   </ItemGroup>
 </Project>

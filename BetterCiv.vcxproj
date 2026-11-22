@@ -37,7 +37,7 @@
       <Optimization Condition="'$(Configuration)'=='Release'">MaxSpeed</Optimization>
       <Optimization Condition="'$(Configuration)'=='Debug'">Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_WINDOWS;_USRDLL;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>$(SporeSdkPath)\Spore ModAPI;$(SporeSdkPath)\EASTL-3.02.01\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EABase\include\Common;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAAssert\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAStdC\include;$(SporeSdkPath)\Detours\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(MSBuildProjectDirectory)\src;$(SporeSdkPath)\Spore ModAPI;$(SporeSdkPath)\EASTL-3.02.01\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EABase\include\Common;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAAssert\include;$(SporeSdkPath)\EASTL-3.02.01\test\packages\EAStdC\include;$(SporeSdkPath)\Detours\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 /external:anglebrackets %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
@@ -55,32 +55,11 @@
     <ClCompile Include="$(MSBuildProjectDirectory)\src\better-civ.cpp" />
     <ClCompile Include="$(MSBuildProjectDirectory)\src\dllmain.cpp" />
     <ClInclude Include="src\BetterCiv.h" />
-    <ClInclude Include="src\NativeExtensions.h" />
-    <ClInclude Include="src\Settings.h" />
-    <ClInclude Include="src\BalancedSpecialties.h" />
-    <ClInclude Include="src\OffensivePolicy.h" />
-    <ClInclude Include="src\ConversionDiagnostics.h" />
-    <ClInclude Include="src\CombatDiagnostics.h" />
-    <ClInclude Include="src\CombatObserver.h" />
-    <ClInclude Include="src\MovementDiagnostics.h" />
-    <ClInclude Include="src\MovementObserver.h" />
-    <ClInclude Include="src\MovementRecovery.h" />
-    <ClInclude Include="src\MovementRecoveryAdapter.h" />
-    <ClInclude Include="src\MovementPlacement.h" />
-    <ClInclude Include="src\MovementPlacementAdapter.h" />
-    <ClInclude Include="src\MovementNative.h" />
-    <ClInclude Include="src\ConversionCapacity.h" />
-    <ClInclude Include="src\ReferenceCode.h" />
-    <ClInclude Include="src\Portraits.h" />
-    <ClInclude Include="src\PortraitCallAlerts.h" />
-    <ClInclude Include="src\PortraitPages.h" />
-    <ClInclude Include="src\PortraitOrder.h" />
-    <ClInclude Include="src\PortraitSpecialties.h" />
-    <ClInclude Include="src\PortraitPagerUI.h" />
   </ItemGroup>
   <Target Name="ValidateSdkPaths" BeforeTargets="PrepareForBuild">
     <Error Condition="!Exists('$(SporeSdkPath)\Spore ModAPI\Spore\ModAPI.h')" Text="Set SporeSdkPath to the Spore ModAPI SDK checkout (see SdkPaths.example.props)." />
     <Error Condition="!Exists('$(SporeLauncherPath)\coreLibs\SporeModAPI.lib')" Text="Set SporeLauncherPath to the ModAPI Launcher Kit directory." />
   </Target>
+  <Import Project="BetterCiv.Sources.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

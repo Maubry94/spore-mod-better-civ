@@ -2,12 +2,6 @@
 static void verify_offensive_policy()
 {
     settings = defaults;
-    apply_option(&settings, "<OffensiveTargets>RethinkFailedAttacks");
-    apply_option(&settings, "<AIDiagnostics>DiagnosticsOn");
-    assert(settings.rethink_offensives == 1 && settings.ai_diagnostics == 1);
-    apply_option(&settings, "<OffensiveTargets>TargetsVanilla");
-    apply_option(&settings, "<AIDiagnostics>DiagnosticsOff");
-    assert(memcmp(&settings, &defaults, sizeof settings) == 0);
     using namespace Offensive;
     for (uint32_t seed = 0; seed < 30; ++seed) {
         State state;
@@ -72,11 +66,6 @@ static void verify_offensive_policy()
     assert(state.Observe(o, 1) == Event::None && !state.CanReconsider(o));
 
     for (const auto seconds : {120, 180, 240}) {
-        Settings choice = defaults;
-        char option[64]; sprintf_s(option, "<StalledOffensives>Stalled%d", seconds);
-        apply_option(&choice, option); assert(choice.stalled_seconds == seconds);
-        apply_option(&choice, "<StalledOffensives>StalledOff");
-        assert(memcmp(&choice, &defaults, sizeof choice) == 0);
         State siege;
         Observation s{0, 11, 7, 2, 15, 0, 0};
         siege.Observe(s, 1);

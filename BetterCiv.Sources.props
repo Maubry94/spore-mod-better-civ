@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- The DLL and the native test program link the same gameplay modules. -->
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\ai\FleetAdapter.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\ai\FleetPolicy.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\ai\FleetAdapter.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\ai\FleetAdapterInternal.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\ai\FleetNative.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\ai\FleetPolicy.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\ai\OffensivePolicy.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\cities\CityRules.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\cities\VehiclePrices.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\cities\BalancedSpecialties.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\cities\CityRules.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\cities\SpiceOwnershipAdapter.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\cities\VehiclePrices.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\combat\CombatDiagnostics.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\combat\CombatObserver.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\combat\ConversionCapacity.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\combat\ConversionDiagnostics.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\diplomacy\DiplomacyRoster.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\PortraitCallAlerts.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\PortraitOrder.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\PortraitPagerUI.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\PortraitPages.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\PortraitSpecialties.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\diplomacy\Portraits.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\engine\NativePatches.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\engine\SimulationRuntime.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\engine\NativeExtensions.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\engine\NativePatches.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\engine\ReferenceCode.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\engine\Runtime.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\engine\SimulationRuntime.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\movement\MovementObserver.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\movement\MovementPlacement.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\movement\MovementPlacementAdapter.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\movement\MovementRecoveryAdapter.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementAdapter.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementAdapterInternal.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementDiagnostics.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementNative.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementObserver.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementPlacement.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\movement\MovementRecovery.h" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\settings\Settings.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\settings\Settings.h" />
+    <None Include="$(MSBuildThisFileDirectory)src\settings\SettingsChoices.inc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)src\trade\TradeRoutes.cpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\GroundTradeRoad.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\HarborDiagnosticsAdapter.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\SeaRibbon.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeRouteAdapter.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeRouteGeometry.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeRouteNative.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeRoutes.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeTransit.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)src\trade\TradeTransitAdapter.h" />
+  </ItemGroup>
+</Project>

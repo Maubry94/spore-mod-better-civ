@@ -1,4 +1,9 @@
+// Native callback tests replace private engine bindings with x86 fixtures.
+// The gameplay modules are compiled separately and linked into both targets.
+#include <Spore/Palettes/PaletteItem.h>
 #include "better-civ.cpp"
+#include "ai/FleetAdapterInternal.h"
+#include "movement/MovementAdapterInternal.h"
 using namespace BetterCiv;
 #include <assert.h>
 #include <crtdbg.h>
@@ -15,7 +20,7 @@ enum {
     kCityTradePartnersBegin=0x55c, kCityTradePartnersEnd=0x560,
     kVehiclePurpose=0xb20, kVehicleHitFlag=0xbcc
 };
-struct TradePartner { uint32_t political_id; void* route; int type; };
+struct TradePartner { void* city; void* route; int type; };
 using PoliticalId=uint32_t (__thiscall*)(const void*);
 static const void* read_pointer(const void* object, size_t offset) {
     const void* value;
@@ -101,7 +106,8 @@ static const Settings defaults = {
 static const Settings mixed = {
     75, 25, 12, 30, 30, 4000, 15000, kMilitaryMask | kEconomicMask, 1, TURRETS_ALL_SPECIALTIES, 0, 0, 0, 0, 0,
 };
-#include "installer-preset-tests.h"
+void VerifyPublicSettings();
+void VerifySimulationPolicies();
 
 static const float *__fastcall mock_read_float(void *property, int)
 {
@@ -122,35 +128,7 @@ static float __fastcall mock_read_script(void *script, int, const char *name)
 
 static void verify_settings(void)
 {
-    settings = defaults;
-    apply_option(&settings, "<VehicleCost>CostVanilla");
-    apply_option(&settings, "<OffensiveUnits>OffensiveUnitsVanilla");
-    apply_option(&settings, "<UnknownGroup>UnknownOption");
-    apply_option(&settings, "<VehicleCost>Cost50Trailing");
-    apply_option(&settings, "<CapturedCities>CaptureVanilla");
-    assert(memcmp(&settings, &defaults, sizeof settings) == 0);
-    apply_option(&settings, "<AIPopulation>Population15To50");
-    assert(settings.population_min == 15 && settings.population_max == 50);
-    assert(settings.wealth_min == 4000 && settings.wealth_max == 4000);
-
-    const char *legacy_choices[] = {
-        "<Prix>PrixModere", "<Tir>TirRapide", "<Vitesse>Vitesse125",
-        "<Offensifs>Offensifs12", "<Population>PopulationEgale30",
-        "<Tresorerie>TresorerieVariable", "<Specialites>SansReligieuses",
-        "<Capture>CaptureConserve", "<Tourelles>TourellesTous",
-        "<Commerce>CommerceVanilla", "<RepliCommercial>RepliVanilla",
-    };
-    Settings legacy = defaults;
-    for (size_t i = 0; i < sizeof legacy_choices / sizeof legacy_choices[0]; ++i)
-        apply_option(&legacy, legacy_choices[i]);
-    assert(memcmp(&legacy, &mixed, sizeof legacy) == 0);
-
-    // Load the real installer settings format using the DLL-relative directory layout.
-    settings = defaults;
-    mod_instance = GetModuleHandleW(NULL);
-    load_options();
-    assert(memcmp(&settings, &mixed, sizeof settings) == 0);
-
+    settings = mixed;
     read_float_property = reinterpret_cast<decltype(read_float_property)>(mock_read_float);
     read_script_float = reinterpret_cast<decltype(read_script_float)>(mock_read_script);
     float cost = 1000.0f;
@@ -418,9 +396,10 @@ static void verify_foundation(FoundationDecoder decode)
 {
     unsigned char site[0x64] = {};
     number_of_draws = 0;
-    const char *options[] = {
-        "EqualOdds", "NoMilitary", "NoReligious", "NoEconomic",
-        "MilitaryOnly", "ReligiousOnly", "EconomicOnly",
+    const PublicChoice options[] = {
+        PublicChoice::EqualOdds, PublicChoice::NoMilitary, PublicChoice::NoReligious,
+        PublicChoice::NoEconomic, PublicChoice::MilitaryOnly, PublicChoice::ReligiousOnly,
+        PublicChoice::EconomicOnly,
     };
     const int specialties[][2] = {
         {kMilitary, kMilitary}, {kReligious, kEconomic}, {kMilitary, kEconomic},
@@ -430,10 +409,8 @@ static void verify_foundation(FoundationDecoder decode)
     random_below = reinterpret_cast<decltype(random_below)>(mock_random);
     simulation_random = &mock_draw;
     for (size_t i = 0; i < sizeof options / sizeof options[0]; ++i) {
-        char line[80];
-        snprintf(line, sizeof line, "<AISpecialties>%s", options[i]);
         settings = defaults;
-        apply_option(&settings, line);
+        ApplyPublicChoice(settings, options[i]);
         for (mock_draw = 0; mock_draw < 2; ++mock_draw) {
             int native = kMilitary;
             memcpy(site + kSiteSpecialty, &native, sizeof native);
@@ -570,6 +547,10 @@ static void verify_trade_under_fire(float (__cdecl *predicate)(void *))
     assert(predicate(vehicle) == 1.0f);
 }
 
+static uint32_t fixture_trade_partner_id(const Simulator::cCityPartner& p) {
+    const auto* city=Native::TradePartnerCity(p);
+    return city ? mock_political_id(read_pointer(city,0x590),0) : UINT32_MAX;
+}
 static void verify_rival_trade(void)
 {
     unsigned char origin[0xb8] = {0}, partner[0xa4] = {0};
@@ -586,7 +567,9 @@ static void verify_rival_trade(void)
     partner[0x24] = 2;
     trade_player[0x24] = 3;
     trade_player[kCivIsPlayerOwned] = 1;
-    TradePartner route = {3, NULL, 0};
+    unsigned char player_city[0x594]={}; put_pointer(player_city,0x590,trade_player);
+    TradePartner route = {player_city, NULL, 0};
+    trade_partner_id=fixture_trade_partner_id;
     put_pointer(home, kCityTradePartnersBegin, &route);
     put_pointer(home, kCityTradePartnersEnd, &route + 1);
     void *cities[] = {home};
@@ -615,9 +598,9 @@ static void verify_rival_trade(void)
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     order.target = target;
     assert(call_trade_acceptance(NULL, target, origin) == 1.0f);
-    route.political_id = 2;
+    route.city = target;
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
-    route.political_id = 3;
+    route.city = player_city;
     partner_opinion = 1;
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     partner_opinion = 2;
@@ -631,6 +614,7 @@ static void verify_rival_trade(void)
     assert(call_trade_acceptance(NULL, target, origin) == 0.0f);
     native_trade = 0.6f;
     assert(call_trade_acceptance(NULL, target, origin) == 0.6f);
+    trade_partner_id=live_trade_partner_id;
 }
 
 #include "conversion-capacity-tests.h"
@@ -713,8 +697,11 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
     settings.ai_diagnostics = (ai_options >> 1) & 1;
     settings.stalled_seconds = (ai_options & 4) ? 180 : 0;
     settings.retry_blocked_paths=variant==1?2:0;
+    settings.rebalance_land=variant==1;
     auto* request_site=image+0xc9ea20-kReferenceBase;
     unsigned char request_original[5];memcpy(request_original,request_site,5);
+    auto* transit_site=image+0xdcc7c0-kReferenceBase;
+    unsigned char transit_original[5];memcpy(transit_original,transit_site,5);
     const uint32_t ai_sites[] = {0xbfbfe5, 0xbfbfee, 0xbfaa32};
     const uintptr_t ai_targets[] = {reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
         reinterpret_cast<uintptr_t>(observed_expansion_planner::detoured_function),
@@ -739,7 +726,7 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
         }
     }
     if (variant == 2)
-        apply_option(&settings, "<TurretsAndFleets>MaxByTypeOnHard");
+        ApplyPublicChoice(settings, PublicChoice::MaxByTypeOnHard);
     unsigned char original_option_bytes[sizeof optional_sites / sizeof optional_sites[0]][5];
     for (size_t i = 0; i < sizeof optional_sites / sizeof optional_sites[0]; ++i)
         memcpy(original_option_bytes[i], image + optional_sites[i] - kReferenceBase, 5);
@@ -804,6 +791,24 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
     for (uint32_t address : palette_sites)
         assert(VirtualProtect(image + address - kReferenceBase, 5, PAGE_EXECUTE_READ, &old));
     assert(install_rules(image));
+    auto* sea_search_site=image+0xb8cbac-kReferenceBase;
+    uint32_t sea_displacement;
+    memcpy(&sea_displacement,sea_search_site+1,sizeof(sea_displacement));
+    assert(sea_search_site[0]==0xe8 && reinterpret_cast<uintptr_t>(sea_search_site)+5+sea_displacement==
+        (settings.assist_rival_trade ? reinterpret_cast<uintptr_t>(sea_ribbon_search) :
+        reinterpret_cast<uintptr_t>(image)+0xac68a0-kReferenceBase));
+    for (uint32_t address:{0xb5d271u,0xb8d434u,0xcde94bu,0xcdea16u,0xcfbda8u,0xd44de2u,0xde6697u,0xeb23f7u}) {
+        auto* site=image+address-kReferenceBase;
+        uint32_t displacement; memcpy(&displacement,site+1,4);
+        auto destination=reinterpret_cast<uintptr_t>(site)+5+displacement;
+        assert(site[0]==0xe8 && destination==(settings.assist_rival_trade ?
+            reinterpret_cast<uintptr_t>(draw_transport_routes) : reinterpret_cast<uintptr_t>(image)+0xb8c480-kReferenceBase));
+    }
+    if(settings.retry_blocked_paths==2 || settings.ai_diagnostics || settings.assist_rival_trade) {
+        uint32_t displacement;memcpy(&displacement,transit_site+1,4);
+        assert(transit_site[0]==0xe9 && reinterpret_cast<uintptr_t>(transit_site)+5+displacement==reinterpret_cast<uintptr_t>(guarded_trade_update));
+        assert(trade_transit_native_ready && trade_update_continue==reinterpret_cast<uintptr_t>(transit_site)+5);
+    } else assert(!memcmp(transit_site,transit_original,5));
     if(settings.retry_blocked_paths==2) {
         uint32_t displacement;memcpy(&displacement,request_site+1,4);
         assert(request_site[0]==0xe9 && reinterpret_cast<uintptr_t>(request_site)+5+displacement==reinterpret_cast<uintptr_t>(retained_local_request));
@@ -852,6 +857,7 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
         memcpy(&relative, site + 1, 4);
         uintptr_t target = variant == 0 ? (uintptr_t)(image + 0xbf2110 - kReferenceBase)
                                         : (uintptr_t)configured_fleet_capacity::detoured_function;
+        if (fleet_sites[i]==0xbf228a && settings.rebalance_land) target=(uintptr_t)recruitment_capacity::detoured_function;
         assert(site[0] == 0xe8 && (uintptr_t)site + 5 + relative == target);
     }
     for (size_t i = 0; i < sizeof palette_sites / sizeof palette_sites[0]; ++i) {
@@ -869,6 +875,21 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
             assert(site[0] == 0xe8 && reinterpret_cast<uintptr_t>(site) + 5 + address ==
                    reinterpret_cast<uintptr_t>(configured_palette_int));
         }
+    }
+    {
+        const auto* site=image+0xbf75d2-kReferenceBase;
+        uint32_t relative; memcpy(&relative,site+1,4);
+        const auto target = settings.rebalance_land ? reinterpret_cast<uintptr_t>(guarded_ai_land_sale)
+            : reinterpret_cast<uintptr_t>(image+0xcaa7b0-kReferenceBase);
+        assert(site[0]==0xe8 && reinterpret_cast<uintptr_t>(site)+5+relative==target);
+    }
+    for(const auto hook: {std::pair<uint32_t,uintptr_t>{0xdca0b0,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},
+        {0xdcc7f1,reinterpret_cast<uintptr_t>(feasible_trade_order::detoured_function)},
+        {0xdca6b9,reinterpret_cast<uintptr_t>(trade_proposal_arrival)}}) {
+        const auto* site=image+hook.first-kReferenceBase;uint32_t relative;memcpy(&relative,site+1,4);
+        const bool transport_enabled=hook.first==0xdca6b9?settings.retry_blocked_paths==2:bool(settings.assist_rival_trade || settings.retire_stranded);
+        const uintptr_t expected=transport_enabled?hook.second:reinterpret_cast<uintptr_t>(image)+(hook.first==0xdca6b9?0xc42f80:0xca7360)-kReferenceBase;
+        assert(site[0]==0xe8 && reinterpret_cast<uintptr_t>(site)+5+relative==expected);
     }
     const uint32_t commerce_sites[] = {0xbfb446, 0xbfb7bc, 0xdca391};
     for (size_t i = 0; i < sizeof commerce_sites / sizeof commerce_sites[0]; ++i) {
@@ -904,6 +925,10 @@ static void verify_reference_writes(const char *path, int variant, int ai_option
 #include "fleet-tests.h"
 #include "trade-route-tests.h"
 #include "movement-fleet-fix-tests.h"
+#include "trade-transit-tests.h"
+#include "harbor-fix2-tests.h"
+#include "sea-ribbon-tests.h"
+#include "spice-ownership-tests.h"
 
 int main(int argc, char *argv[])
 {
@@ -982,7 +1007,7 @@ int main(int argc, char *argv[])
     assert(call_defensive_capacity_target(city) == 8);
     assert(install_rules(NULL) == 0);
     verify_settings();
-    verify_installer_presets();
+    VerifyPublicSettings();
     puts("Settings checks passed; checking palette prices...");
     verify_palette_prices();
     puts("Palette price and affordability checks passed.");
@@ -1005,19 +1030,21 @@ int main(int argc, char *argv[])
     verify_combat_diagnostics();
     verify_movement_diagnostics();
     verify_movement_recovery();
-    verify_placement_policy();
+    VerifySimulationPolicies();
     verify_placement_adapter();
     verify_placement_loops();
     verify_placement_terrain();
-    verify_traffic_geometry();
     verify_traffic_adapter();
-    verify_fleet_policy();
     verify_fleet_adapter();
     verify_land_fleet_adapter();
     verify_retained_request();
     verify_religious_surplus();
     verify_trade_geometry();
     verify_trade_adapter();
+    verify_trade_transit();
+    verify_harbor_fix2();
+    verify_sea_ribbon();
+    verify_spice_ownership();
     verify_conversion_capacity();
     puts("Diplomacy slot reuse, priority, map/reference ownership and lifecycle checks passed.");
     verify_reference_writes(argv[1], 0);

@@ -53,7 +53,7 @@ static void verify_balanced_foundation(FoundationDecoder decode)
     simulation_random = &balanced_seed;
     current_mode = kCivilizationMode;
     settings = defaults;
-    apply_option(&settings, "<AISpecialties>Balanced333");
+    ApplyPublicChoice(settings, PublicChoice::Balanced333);
     assert(settings.balanced_specialties && settings.specialty_mask == kAllSpecialties);
 
     Native::CityFoundation site{};
@@ -107,18 +107,16 @@ static void verify_balanced_foundation(FoundationDecoder decode)
     assert(starting_specialties.Remaining() == 9);
 
     // A choice switch must not retain the balanced flag or its full mask.
-    for (const char* choice : {"EqualOdds", "NoMilitary", "NoReligious", "NoEconomic",
-            "MilitaryOnly", "ReligiousOnly", "EconomicOnly"}) {
-        apply_option(&settings, "<AISpecialties>Balanced333");
-        char line[80]; snprintf(line, sizeof line, "<AISpecialties>%s", choice);
-        apply_option(&settings, line);
+    for (auto choice : {PublicChoice::EqualOdds, PublicChoice::NoMilitary, PublicChoice::NoReligious,
+            PublicChoice::NoEconomic, PublicChoice::MilitaryOnly, PublicChoice::ReligiousOnly, PublicChoice::EconomicOnly}) {
+        ApplyPublicChoice(settings, PublicChoice::Balanced333);
+        ApplyPublicChoice(settings, choice);
         assert(!settings.balanced_specialties);
     }
-    apply_option(&settings, "<AISpecialties>Balanced333");
-    apply_option(&settings, "<AISpecialties>Balanced333Trailing");
-    apply_option(&settings, "<AIDiagnostics>DiagnosticsOff");
+    ApplyPublicChoice(settings, PublicChoice::Balanced333);
+    ApplyPublicChoice(settings, PublicChoice::DiagnosticsOff);
     assert(settings.balanced_specialties && settings.specialty_mask == kAllSpecialties);
-    apply_option(&settings, "<Specialites>TroisSpecialites");
+    ApplyPublicChoice(settings, PublicChoice::EqualOdds);
     assert(!settings.balanced_specialties && settings.specialty_mask == kAllSpecialties);
 
     random_below = saved_random; simulation_random = saved_state;

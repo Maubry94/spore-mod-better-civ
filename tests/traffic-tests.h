@@ -1,19 +1,3 @@
-static void verify_traffic_geometry()
-{
-    namespace P=Placement;
-    // Previously missed: a blocker ahead but well outside physical contact.
-    assert(P::CorridorBlocked({0,0,500},{30,0,500},2,{12,0,500},2));
-    assert(!P::CorridorBlocked({0,0,500},{30,0,500},2,{12,20,500},2));
-    assert(!P::CorridorBlocked({0,0,500},{30,0,500},2,{-12,0,500},2));
-    Math::Vector3 out;
-    auto flat=[](const Math::Vector3&){return 500.0f;};
-    assert(P::ProjectAir({10,0,550},2,550,490,flat,out));
-    assert(std::fabs(P::Distance(out,{})-550)<0.01f); // Preserve flight altitude.
-    assert(!P::ProjectAir({0,0,550},2,550,549,flat,out));
-    assert(!P::ProjectAir({0,0,550},2,550,490,[](const Math::Vector3&){return 546.0f;},out));
-    assert(!P::ProjectAir({0,0,550},2,550,490,[](const Math::Vector3& p){return p.x>1?549.0f:500.0f;},out));
-    puts("Traffic geometry: pre-contact corridor detection, fixed-altitude aircraft clearance and terrain/footprint vetoes passed.");
-}
 static Vehicle* traffic_idle_unit;
 static Native::VehicleOrder traffic_idle_order;
 static const Native::VehicleOrder* __fastcall traffic_order(Vehicle* unit,int) {
@@ -21,6 +5,7 @@ static const Native::VehicleOrder* __fastcall traffic_order(Vehicle* unit,int) {
 }
 static void verify_traffic_adapter()
 {
+    const auto old_phase=trade_detour_check;trade_detour_check=placement_trade_phase;
     alignas(8) unsigned char cb[sizeof(Civilization)]={},ub[sizeof(Vehicle)]={},nb[sizeof(Vehicle)]={};
     auto* civ=reinterpret_cast<Civilization*>(cb);auto* u=reinterpret_cast<Vehicle*>(ub);auto* n=reinterpret_cast<Vehicle*>(nb);
     uintptr_t table[]={reinterpret_cast<uintptr_t>(ai_mock_addref),reinterpret_cast<uintptr_t>(ai_mock_release)};
@@ -53,7 +38,7 @@ static void verify_traffic_adapter()
     reset();u->mDesiredSpeed=0;run(0,30000);assert(!placement_mock_moves); // Do not disturb a stationary delivery animation.
     reset();combat_fixture_order.kind=11;run(0,30000);assert(!placement_mock_moves);
     portrait_fixture_civs.clear();portrait_civilizations=sdk_portrait_civilizations;current_vehicle_order=old_order;
-    recovery_check_methods=recovery_methods_match;placement_plan=placement_find_space;
+    recovery_check_methods=recovery_methods_match;placement_plan=placement_find_space;trade_detour_check=old_phase;
     placement_state={};recovery_native_ready=ai_observer_ready=false;settings=defaults;assert(ai_refs==0);
     puts("Traffic adapter: idle-player yielding, explicit command protection, bounded two-leg detour, air traders and delivery-state protection passed.");
 }

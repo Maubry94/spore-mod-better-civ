@@ -16,6 +16,9 @@ __declspec(dllexport) extern const uintptr_t Allocator_ptr = reinterpret_cast<ui
 __declspec(dllexport) extern const uintptr_t new_ = reinterpret_cast<uintptr_t>(unexpectedEngineAllocation);
 __declspec(dllexport) extern const uintptr_t delete_ = reinterpret_cast<uintptr_t>(unexpectedEngineAllocation);
 }
+namespace Resource::IResourceManager_addresses {
+__declspec(dllexport) extern const uintptr_t Get = reinterpret_cast<uintptr_t>(fixtureSimulator);
+}
 namespace Simulator::cSimulatorSystem_addresses {
 __declspec(dllexport) extern const uintptr_t Get = reinterpret_cast<uintptr_t>(fixtureSimulator);
 }
